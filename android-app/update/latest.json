@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "1.10",
+  "versionCode": 12,
+  "versionName": "1.11",
   "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app.apk",
-  "releaseNotes": "Actualizaciones controladas desde GitHub Releases"
+  "releaseNotes": "Barras compactas con altura fija y enlace de GitHub integrado"
 }

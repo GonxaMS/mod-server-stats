@@ -58,12 +58,10 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 11;
-    private static final String CURRENT_VERSION_NAME = "1.10";
+    private static final int CURRENT_VERSION_CODE = 12;
+    private static final String CURRENT_VERSION_NAME = "1.11";
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
-    private static final String LEGACY_UPDATE_MANIFEST_URL =
-            "https://drive.google.com/uc?export=download&id=1pKcteK4bgqGmTR_kWUK9vS9yQ2iWv0sy";
 
     private EditText addressInput;
     private EditText portInput;
@@ -78,7 +76,6 @@ public final class MainActivity extends Activity {
     private TextView updateView;
     private Button searchUpdateButton;
     private Button updateButton;
-    private EditText updateManifestInput;
     private Switch autoRefreshSwitch;
     private Spinner intervalSpinner;
     private ExecutorService executor;
@@ -359,20 +356,14 @@ public final class MainActivity extends Activity {
         sourceLabel.setTextColor(Color.rgb(105, 115, 125));
         sourceLabel.setTextSize(11);
         updateCard.addView(sourceLabel, marginParams(dp(10)));
-        updateManifestInput = new EditText(this);
-        updateManifestInput.setSingleLine(true);
-        updateManifestInput.setTextSize(12);
-        updateManifestInput.setSelectAllOnFocus(true);
-        updateManifestInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        String savedUpdateUrl = preferences.getString("updateManifestUrl", "");
-        if (savedUpdateUrl.isEmpty() || LEGACY_UPDATE_MANIFEST_URL.equals(savedUpdateUrl)) {
-            savedUpdateUrl = DEFAULT_UPDATE_MANIFEST_URL;
-            preferences.edit().putString("updateManifestUrl", savedUpdateUrl).apply();
-        }
-        updateManifestInput.setText(savedUpdateUrl);
-        updateCard.addView(updateManifestInput, matchWidthWrapHeight());
+        TextView updateSource = new TextView(this);
+        updateSource.setText(DEFAULT_UPDATE_MANIFEST_URL);
+        updateSource.setTextColor(Color.rgb(55, 65, 75));
+        updateSource.setTextSize(12);
+        updateSource.setTextIsSelectable(false);
+        updateCard.addView(updateSource, matchWidthWrapHeight());
         TextView sourceHelp = new TextView(this);
-        sourceHelp.setText("GitHub Releases · la versión se controla desde la Release más reciente.");
+        sourceHelp.setText("Enlace oficial integrado · se consulta solo al pulsar buscar.");
         sourceHelp.setTextColor(Color.rgb(105, 115, 125));
         sourceHelp.setTextSize(12);
         updateCard.addView(sourceHelp, marginParams(dp(5)));
@@ -758,8 +749,13 @@ public final class MainActivity extends Activity {
                                    String valueLabel, int color) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
+        row.setMinimumHeight(0);
+        row.setMinimumWidth(0);
         LinearLayout heading = new LinearLayout(this);
         heading.setOrientation(LinearLayout.HORIZONTAL);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        heading.setMinimumHeight(0);
+        heading.setMinimumWidth(0);
 
         TextView titleView = new TextView(this);
         titleView.setText(title);
@@ -773,12 +769,18 @@ public final class MainActivity extends Activity {
         valueView.setTextSize(13);
         valueView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         heading.addView(valueView, matchWidthWrapHeight());
-        row.addView(heading, matchWidthWrapHeight());
+        row.addView(heading, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(22)));
         LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(8));
-        progressParams.topMargin = dp(5);
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(7));
+        progressParams.topMargin = dp(3);
+        progressParams.leftMargin = dp(1);
+        progressParams.rightMargin = dp(1);
         row.addView(progressBar(value, color), progressParams);
-        parent.addView(row, marginParams(dp(10)));
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(32));
+        rowParams.bottomMargin = dp(8);
+        parent.addView(row, rowParams);
     }
 
     private View progressBar(double value, int color) {
@@ -805,7 +807,7 @@ public final class MainActivity extends Activity {
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
             int width = MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED
                     ? 0 : MeasureSpec.getSize(widthMeasureSpec);
-            setMeasuredDimension(width, dp(8));
+            setMeasuredDimension(width, dp(7));
         }
 
         @Override
@@ -1020,13 +1022,7 @@ public final class MainActivity extends Activity {
     }
 
     private void searchForUpdate() {
-        String manifestUrl = updateManifestInput == null
-                ? DEFAULT_UPDATE_MANIFEST_URL : updateManifestInput.getText().toString().trim();
-        if (manifestUrl.isEmpty()) {
-            showError("Escribe el enlace de actualizaciones.");
-            return;
-        }
-        preferences.edit().putString("updateManifestUrl", manifestUrl).apply();
+        String manifestUrl = DEFAULT_UPDATE_MANIFEST_URL;
         updateCheckedForEndpoint = null;
         checkForUpdate(manifestUrl);
     }
