@@ -58,8 +58,8 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 12;
-    private static final String CURRENT_VERSION_NAME = "1.11";
+    private static final int CURRENT_VERSION_CODE = 13;
+    private static final String CURRENT_VERSION_NAME = "1.12";
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
 
@@ -352,23 +352,8 @@ public final class MainActivity extends Activity {
         TextView updateTitle = label("ACTUALIZACIONES");
         updateTitle.setTextColor(Color.rgb(38, 101, 165));
         updateCard.addView(updateTitle, matchWidthWrapHeight());
-        TextView sourceLabel = label("ENLACE DE ACTUALIZACIONES");
-        sourceLabel.setTextColor(Color.rgb(105, 115, 125));
-        sourceLabel.setTextSize(11);
-        updateCard.addView(sourceLabel, marginParams(dp(10)));
-        TextView updateSource = new TextView(this);
-        updateSource.setText(DEFAULT_UPDATE_MANIFEST_URL);
-        updateSource.setTextColor(Color.rgb(55, 65, 75));
-        updateSource.setTextSize(12);
-        updateSource.setTextIsSelectable(false);
-        updateCard.addView(updateSource, matchWidthWrapHeight());
-        TextView sourceHelp = new TextView(this);
-        sourceHelp.setText("Enlace oficial integrado · se consulta solo al pulsar buscar.");
-        sourceHelp.setTextColor(Color.rgb(105, 115, 125));
-        sourceHelp.setTextSize(12);
-        updateCard.addView(sourceHelp, marginParams(dp(5)));
         updateView = new TextView(this);
-        updateView.setText("Pulsa buscar cuando quieras comprobar una versión nueva.");
+        updateView.setText("Pulsa buscar para comprobar si hay una versión nueva.");
         updateView.setTextColor(Color.rgb(90, 100, 110));
         updateView.setTextSize(13);
         updateCard.addView(updateView, marginParams(dp(6)));
