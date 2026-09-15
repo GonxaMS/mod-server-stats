@@ -31,11 +31,16 @@ final class StatsChartView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final ArrayList<StatsSample> samples = new ArrayList<>();
     private int metric = METRIC_TPS;
+    private long rangeStartMs;
+    private long rangeEndMs;
+    private boolean liveRange;
 
     StatsChartView(Context context) {
         super(context);
         setMinimumHeight(dp(230));
         setBackgroundColor(COLOR_SURFACE_RAISED);
+        setTimeRange(System.currentTimeMillis() - 60L * 60L * 1000L,
+                System.currentTimeMillis(), true);
     }
 
     void setMetric(int metric) {
@@ -49,6 +54,13 @@ final class StatsChartView extends View {
         invalidate();
     }
 
+    void setTimeRange(long startMs, long endMs, boolean live) {
+        rangeStartMs = Math.min(startMs, endMs);
+        rangeEndMs = Math.max(startMs, endMs);
+        liveRange = live;
+        invalidate();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -56,36 +68,47 @@ final class StatsChartView extends View {
         float top = dp(38);
         float right = getWidth() - dp(16);
         float bottom = getHeight() - dp(30);
+        long startMs = chartStart();
+        long endMs = chartEnd();
 
         paint.setTypeface(android.graphics.Typeface.MONOSPACE);
         paint.setFakeBoldText(true);
         paint.setTextSize(dp(14));
         paint.setColor(COLOR_TEXT);
-        canvas.drawText(metricLabel(metric), dp(16), dp(23), paint);
+        canvas.drawText(metricLabel(metric) + " // " + rangeLabel(endMs - startMs),
+                dp(16), dp(23), paint);
 
-        if (samples.isEmpty()) {
+        if (samples.isEmpty() || !hasVisibleSample(startMs, endMs)) {
             paint.setTypeface(android.graphics.Typeface.MONOSPACE);
             paint.setFakeBoldText(false);
             paint.setTextSize(dp(14));
             paint.setColor(COLOR_MUTED);
-            canvas.drawText("Activa la actualizaci\u00f3n autom\u00e1tica o pulsa Actualizar.", dp(16), getHeight() / 2f, paint);
+            canvas.drawText("Sin datos en este periodo.", dp(16), getHeight() / 2f, paint);
             return;
         }
 
-        Scale scale = calculateScale();
-        drawGrid(canvas, left, top, right, bottom, scale);
-        drawLine(canvas, left, top, right, bottom, scale);
-        drawLabels(canvas, left, top, right, bottom, scale);
+        Scale scale = calculateScale(startMs, endMs);
+        drawGrid(canvas, left, top, right, bottom, scale, startMs, endMs);
+        drawLine(canvas, left, top, right, bottom, scale, startMs, endMs);
+        drawLabels(canvas, left, top, right, bottom, scale, startMs, endMs);
+        if (liveRange) postInvalidateDelayed(1_000L);
     }
 
-    private Scale calculateScale() {
+    private Scale calculateScale(long startMs, long endMs) {
         double min = Double.MAX_VALUE;
         double max = -Double.MAX_VALUE;
+        double latest = -1.0;
+        long latestTimestamp = Long.MIN_VALUE;
         for (StatsSample sample : samples) {
+            if (!isInRange(sample, startMs, endMs)) continue;
             double value = sample.valueFor(metric);
             if (isValid(value)) {
                 min = Math.min(min, value);
                 max = Math.max(max, value);
+                if (sample.capturedAtMs >= latestTimestamp) {
+                    latestTimestamp = sample.capturedAtMs;
+                    latest = value;
+                }
             }
         }
         if (min == Double.MAX_VALUE) {
@@ -109,16 +132,40 @@ final class StatsChartView extends View {
         if (max - min < 0.1) {
             max = min + 1.0;
         }
-        return new Scale(min, max, samples.get(samples.size() - 1).valueFor(metric));
+        return new Scale(min, max, latest);
     }
 
-    private void drawGrid(Canvas canvas, float left, float top, float right, float bottom, Scale scale) {
+    private void drawGrid(Canvas canvas, float left, float top, float right, float bottom, Scale scale,
+                          long startMs, long endMs) {
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1f);
         paint.setColor(COLOR_GRID);
         for (int index = 0; index <= 4; index++) {
             float y = top + (bottom - top) * index / 4f;
             canvas.drawLine(left, y, right, y, paint);
+        }
+        long duration = Math.max(1L, endMs - startMs);
+        long tickMs = tickInterval(duration);
+        paint.setColor(Color.rgb(0, 105, 115));
+        paint.setStrokeWidth(1f);
+        paint.setStyle(Paint.Style.STROKE);
+        for (long offset = tickMs; offset < duration; offset += tickMs) {
+            long tick = startMs + offset;
+            float x = left + (right - left) * (tick - startMs) / (float) duration;
+            canvas.drawLine(x, top, x, bottom, paint);
+        }
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTextSize(dp(10));
+        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+        paint.setFakeBoldText(false);
+        for (long offset = tickMs; offset < duration; offset += tickMs) {
+            long tick = startMs + offset;
+            float x = left + (right - left) * (tick - startMs) / (float) duration;
+            paint.setColor(COLOR_MUTED);
+            String label = formatTime(tick, duration);
+            float width = paint.measureText(label);
+            canvas.drawText(label, Math.max(left, Math.min(x - width / 2f, right - width)), bottom + dp(19), paint);
+            paint.setColor(Color.rgb(0, 105, 115));
         }
         paint.setStyle(Paint.Style.FILL);
         paint.setTypeface(android.graphics.Typeface.MONOSPACE);
@@ -129,21 +176,23 @@ final class StatsChartView extends View {
         canvas.drawText(formatValue(scale.min), dp(4), bottom, paint);
     }
 
-    private void drawLine(Canvas canvas, float left, float top, float right, float bottom, Scale scale) {
-        long firstTime = samples.get(0).capturedAtMs;
-        long lastTime = samples.get(samples.size() - 1).capturedAtMs;
+    private void drawLine(Canvas canvas, float left, float top, float right, float bottom, Scale scale,
+                          long firstTime, long lastTime) {
         long duration = Math.max(1L, lastTime - firstTime);
         Path line = new Path();
         boolean hasPoint = false;
         for (StatsSample sample : samples) {
+            if (!isInRange(sample, firstTime, lastTime)) {
+                hasPoint = false;
+                continue;
+            }
             double value = sample.valueFor(metric);
             if (!isValid(value)) {
                 hasPoint = false;
                 continue;
             }
-            float x = samples.size() == 1
-                    ? right
-                    : left + (right - left) * (sample.capturedAtMs - firstTime) / (float) duration;
+            float x = left + (right - left) * (sample.capturedAtMs - firstTime) / (float) duration;
+            if (x < left || x > right) continue;
             float y = bottom - (float) ((value - scale.min) / (scale.max - scale.min)) * (bottom - top);
             if (!hasPoint) {
                 line.moveTo(x, y);
@@ -161,8 +210,8 @@ final class StatsChartView extends View {
         paint.setStyle(Paint.Style.FILL);
     }
 
-    private void drawLabels(Canvas canvas, float left, float top, float right, float bottom, Scale scale) {
-        StatsSample latest = samples.get(samples.size() - 1);
+    private void drawLabels(Canvas canvas, float left, float top, float right, float bottom, Scale scale,
+                            long startMs, long endMs) {
         paint.setTypeface(android.graphics.Typeface.MONOSPACE);
         paint.setFakeBoldText(true);
         paint.setTextSize(dp(14));
@@ -175,8 +224,9 @@ final class StatsChartView extends View {
         paint.setFakeBoldText(false);
         paint.setTextSize(dp(11));
         paint.setColor(COLOR_MUTED);
-        String start = formatTime(samples.get(0).capturedAtMs);
-        String end = formatTime(latest.capturedAtMs);
+        long duration = Math.max(1L, endMs - startMs);
+        String start = formatTime(startMs, duration);
+        String end = formatTime(endMs, duration);
         canvas.drawText(start, left, bottom + dp(19), paint);
         float endWidth = paint.measureText(end);
         canvas.drawText(end, right - endWidth, bottom + dp(19), paint);
@@ -184,6 +234,19 @@ final class StatsChartView extends View {
 
     private static boolean isValid(double value) {
         return Double.isFinite(value) && value >= 0.0;
+    }
+
+    private static boolean isInRange(StatsSample sample, long startMs, long endMs) {
+        return sample.capturedAtMs >= startMs && sample.capturedAtMs <= endMs;
+    }
+
+    private boolean hasVisibleSample(long startMs, long endMs) {
+        for (StatsSample sample : samples) {
+            if (isInRange(sample, startMs, endMs) && isValid(sample.valueFor(metric))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String metricLabel(int selectedMetric) {
@@ -212,8 +275,45 @@ final class StatsChartView extends View {
         return String.format(Locale.getDefault(), "%.1f", value);
     }
 
-    private static String formatTime(long timestampMs) {
-        return new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date(timestampMs));
+    private static String formatTime(long timestampMs, long durationMs) {
+        String pattern = durationMs > 24L * 60L * 60L * 1000L ? "dd/MM HH:mm" : "HH:mm";
+        return new SimpleDateFormat(pattern, Locale.getDefault()).format(new Date(timestampMs));
+    }
+
+    private static String rangeLabel(long durationMs) {
+        long hour = 60L * 60L * 1000L;
+        long[] presetDurations = {hour, 2L * hour, 5L * hour, 12L * hour, 24L * hour};
+        String[] presetLabels = {"1 h", "2 h", "5 h", "12 h", "1 dia"};
+        for (int index = 0; index < presetDurations.length; index++) {
+            if (Math.abs(durationMs - presetDurations[index]) <= 5L * 60L * 1000L) {
+                return presetLabels[index];
+            }
+        }
+        if (durationMs < hour) {
+            return Math.max(1L, Math.round(durationMs / 60_000.0)) + " min";
+        }
+        return String.format(Locale.getDefault(), "%.1f h", durationMs / (double) hour);
+    }
+
+    private long chartStart() {
+        if (liveRange && rangeEndMs > rangeStartMs) {
+            return Math.max(0L, System.currentTimeMillis() - (rangeEndMs - rangeStartMs));
+        }
+        return rangeStartMs > 0L ? rangeStartMs : samples.get(0).capturedAtMs;
+    }
+
+    private long chartEnd() {
+        return liveRange ? Math.max(System.currentTimeMillis(), rangeEndMs)
+                : (rangeEndMs > 0L ? rangeEndMs : samples.get(samples.size() - 1).capturedAtMs);
+    }
+
+    private static long tickInterval(long durationMs) {
+        long hour = 60L * 60L * 1000L;
+        if (durationMs <= 90L * 60L * 1000L) return 10L * 60L * 1000L;
+        if (durationMs <= 3L * hour) return 20L * 60L * 1000L;
+        if (durationMs <= 8L * hour) return hour;
+        if (durationMs <= 18L * hour) return 2L * hour;
+        return 4L * hour;
     }
 
     private static int colorFor(int selectedMetric) {

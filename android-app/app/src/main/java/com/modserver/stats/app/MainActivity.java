@@ -62,10 +62,18 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
+    private static final long ONE_HOUR_MS = 60L * 60L * 1000L;
+    private static final long[] HISTORY_RANGE_DURATIONS_MS = {
+            ONE_HOUR_MS,
+            2L * ONE_HOUR_MS,
+            5L * ONE_HOUR_MS,
+            12L * ONE_HOUR_MS,
+            24L * ONE_HOUR_MS
+    };
     private static final int MIN_API_TOKEN_LENGTH = 32;
     private static final int MIN_API_PASSWORD_LENGTH = 12;
-    private static final int CURRENT_VERSION_CODE = 29;
-    private static final String CURRENT_VERSION_NAME = "1.28";
+    private static final int CURRENT_VERSION_CODE = 30;
+    private static final String CURRENT_VERSION_NAME = "1.29";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -98,6 +106,7 @@ public final class MainActivity extends Activity {
     private Button historyStartButton;
     private Button historyEndButton;
     private Button loadHistoryButton;
+    private Button[] historyPresetButtons;
     private TextView updateView;
     private Button searchUpdateButton;
     private Button updateButton;
@@ -109,9 +118,12 @@ public final class MainActivity extends Activity {
     private Runnable autoRefreshRunnable;
     private boolean requestInProgress;
     private boolean historyRequestInFlight;
+    private long historyRequestSequence;
+    private String historyRequestEndpoint;
     private String historyLoadedForEndpoint;
     private long historyStartMs;
     private long historyEndMs;
+    private boolean liveHistory = true;
     private boolean updateCheckInFlight;
     private String updateCheckedForEndpoint;
     private String updateDownloadEndpoint;
@@ -129,7 +141,7 @@ public final class MainActivity extends Activity {
         mainHandler = new Handler(Looper.getMainLooper());
         preferences = getSharedPreferences(PREFERENCES, MODE_PRIVATE);
         historyEndMs = System.currentTimeMillis();
-        historyStartMs = historyEndMs - 6L * 60L * 60L * 1000L;
+        historyStartMs = historyEndMs - ONE_HOUR_MS;
         setContentView(createContentView());
     }
 
@@ -261,6 +273,30 @@ public final class MainActivity extends Activity {
         content.addView(rangeCard, cardParams(dp(14)));
         updateHistoryRangeLabels();
 
+        TextView rangeHeading = label("VENTANA DE TIEMPO");
+        rangeHeading.setTextSize(12);
+        content.addView(rangeHeading, marginParams(dp(8)));
+        LinearLayout presetRow = new LinearLayout(this);
+        presetRow.setOrientation(LinearLayout.HORIZONTAL);
+        String[] presetLabels = {"1 H", "2 H", "5 H", "12 H", "1 D"};
+        historyPresetButtons = new Button[presetLabels.length];
+        for (int index = 0; index < presetLabels.length; index++) {
+            final int presetIndex = index;
+            Button preset = actionButton(presetLabels[index],
+                    index == 0 ? COLOR_CYAN : COLOR_SURFACE_RAISED);
+            preset.setTextSize(11);
+            preset.setMinHeight(dp(38));
+            preset.setPadding(dp(2), 0, dp(2), 0);
+            preset.setOnClickListener(view -> selectHistoryPreset(presetIndex));
+            historyPresetButtons[index] = preset;
+            LinearLayout.LayoutParams presetParams = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            if (index > 0) presetParams.leftMargin = dp(5);
+            presetRow.addView(preset, presetParams);
+        }
+        content.addView(presetRow, marginParams(dp(8)));
+        updateHistoryPresetSelection(0);
+
         Spinner chartMetricSpinner = new Spinner(this);
         String[] chartMetrics = {"TPS", "MSPT", "CPU de Minecraft", "CPU del equipo", "Memoria",
                 "Jugadores", "Tiempo de respuesta"};
@@ -271,6 +307,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout chartCard = card();
         chartView = new StatsChartView(this);
+        chartView.setTimeRange(historyStartMs, historyEndMs, true);
         chartCard.addView(chartView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(250)));
         content.addView(chartCard, cardParams(dp(14)));
@@ -1005,21 +1042,62 @@ public final class MainActivity extends Activity {
     }
 
     private void addHistorySample(StatsSample sample) {
+        if (!liveHistory) {
+            return;
+        }
         history.add(sample);
         if (history.size() > MAX_HISTORY_SAMPLES) {
             history.remove(0);
         }
         chartView.setSamples(history);
+        if (liveHistory) {
+            historyEndMs = System.currentTimeMillis();
+            historyStartMs = historyEndMs - ONE_HOUR_MS;
+            chartView.setTimeRange(historyStartMs, historyEndMs, true);
+            updateHistoryRangeLabels();
+        }
     }
 
     private void loadPersistentHistoryIfNeeded(String statsEndpoint, StatsSample latestSample) {
-        if (historyRequestInFlight || statsEndpoint.equals(historyLoadedForEndpoint)) {
+        if (statsEndpoint.equals(historyLoadedForEndpoint)) {
+            return;
+        }
+        if (historyRequestInFlight && statsEndpoint.equals(historyRequestEndpoint)) {
             return;
         }
         loadHistory(statsEndpoint, latestSample);
     }
 
     private void loadSelectedHistory() {
+        updateHistoryPresetSelection(-1);
+        requestHistoryForCurrentRange(false);
+    }
+
+    private void selectHistoryPreset(int presetIndex) {
+        if (presetIndex < 0 || presetIndex >= HISTORY_RANGE_DURATIONS_MS.length) {
+            return;
+        }
+        historyEndMs = System.currentTimeMillis();
+        historyStartMs = historyEndMs - HISTORY_RANGE_DURATIONS_MS[presetIndex];
+        updateHistoryPresetSelection(presetIndex);
+        updateHistoryRangeLabels();
+        requestHistoryForCurrentRange(presetIndex == 0);
+    }
+
+    private void updateHistoryPresetSelection(int selectedIndex) {
+        if (historyPresetButtons == null) return;
+        for (int index = 0; index < historyPresetButtons.length; index++) {
+            Button button = historyPresetButtons[index];
+            if (button == null) continue;
+            boolean selected = index == selectedIndex;
+            button.setTextColor(selected ? COLOR_BACKGROUND : COLOR_TEXT);
+            button.setBackground(roundBackground(
+                    selected ? COLOR_CYAN : COLOR_SURFACE_RAISED,
+                    selected ? COLOR_CYAN : COLOR_BORDER, 10));
+        }
+    }
+
+    private void requestHistoryForCurrentRange(boolean live) {
         if (historyStartMs >= historyEndMs) {
             showError("La fecha inicial debe ser anterior a la fecha final.");
             return;
@@ -1034,6 +1112,10 @@ public final class MainActivity extends Activity {
                 return;
             }
             historyLoadedForEndpoint = null;
+            liveHistory = live;
+            history.clear();
+            chartView.setSamples(history);
+            chartView.setTimeRange(historyStartMs, historyEndMs, live);
             loadHistory(buildEndpoint(address, port), null);
         } catch (NumberFormatException error) {
             showError("El puerto debe estar entre 1 y 65535.");
@@ -1043,7 +1125,6 @@ public final class MainActivity extends Activity {
     }
 
     private void loadHistory(String statsEndpoint, StatsSample latestSample) {
-        if (historyRequestInFlight) return;
         final String apiUsername = currentApiUsername();
         final String apiPassword = currentApiPassword();
         final String legacyApiToken = currentApiToken();
@@ -1052,12 +1133,17 @@ public final class MainActivity extends Activity {
             showError("Configura usuario y contrasena (minimo 12 caracteres).");
             return;
         }
+        final long requestId = ++historyRequestSequence;
+        final long requestedStartMs = historyStartMs;
+        final long requestedEndMs = historyEndMs;
+        final boolean requestedLive = liveHistory;
+        historyRequestEndpoint = statsEndpoint;
         historyRequestInFlight = true;
         loadHistoryButton.setEnabled(false);
         statusView.setText("Cargando historial…");
         String historyEndpoint = statsEndpoint.replace(
-                "/api/server/stats", "/api/server/history?fromEpochMs=" + historyStartMs
-                        + "&toEpochMs=" + historyEndMs + "&limit=" + MAX_HISTORY_SAMPLES);
+                "/api/server/stats", "/api/server/history?fromEpochMs=" + requestedStartMs
+                        + "&toEpochMs=" + requestedEndMs + "&limit=" + MAX_HISTORY_SAMPLES);
 
         executor.execute(() -> {
             HttpURLConnection connection = null;
@@ -1086,9 +1172,31 @@ public final class MainActivity extends Activity {
                         }
                     }
                 }
-                runOnUiThread(() -> replaceHistory(loadedHistory, latestSample, statsEndpoint));
+                runOnUiThread(() -> {
+                    if (requestId != historyRequestSequence
+                            || (!requestedLive && (requestedStartMs != historyStartMs
+                            || requestedEndMs != historyEndMs))
+                            || !statsEndpoint.equals(historyRequestEndpoint)) {
+                        if (requestId == historyRequestSequence) {
+                            historyRequestInFlight = false;
+                            loadHistoryButton.setEnabled(true);
+                        }
+                        return;
+                    }
+                    replaceHistory(loadedHistory, latestSample, statsEndpoint);
+                });
             } catch (Exception ignored) {
                 runOnUiThread(() -> {
+                    if (requestId != historyRequestSequence
+                            || (!requestedLive && (requestedStartMs != historyStartMs
+                            || requestedEndMs != historyEndMs))
+                            || !statsEndpoint.equals(historyRequestEndpoint)) {
+                        if (requestId == historyRequestSequence) {
+                            historyRequestInFlight = false;
+                            loadHistoryButton.setEnabled(true);
+                        }
+                        return;
+                    }
                     historyRequestInFlight = false;
                     historyLoadedForEndpoint = statsEndpoint;
                     loadHistoryButton.setEnabled(true);
@@ -1136,7 +1244,14 @@ public final class MainActivity extends Activity {
                 } else {
                     historyEndMs = calendar.getTimeInMillis();
                 }
+                historyLoadedForEndpoint = null;
+                liveHistory = false;
                 updateHistoryRangeLabels();
+                if (historyStartMs < historyEndMs) {
+                    loadSelectedHistory();
+                } else {
+                    showError("La fecha inicial debe ser anterior a la fecha final.");
+                }
             }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show();
         }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
                 calendar.get(Calendar.DAY_OF_MONTH)).show();
