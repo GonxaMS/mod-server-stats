@@ -22,11 +22,11 @@ final class StatsChartView extends View {
     static final int METRIC_PLAYERS = 5;
     static final int METRIC_LATENCY = 6;
 
-    private static final int COLOR_SURFACE_RAISED = Color.rgb(13, 27, 33);
-    private static final int COLOR_GRID = Color.rgb(24, 69, 77);
-    private static final int COLOR_TEXT = Color.rgb(224, 255, 246);
-    private static final int COLOR_MUTED = Color.rgb(126, 165, 158);
-    private static final int COLOR_CYAN = Color.rgb(0, 238, 214);
+    private static final int COLOR_SURFACE_RAISED = Color.rgb(7, 13, 18);
+    private static final int COLOR_GRID = Color.rgb(0, 55, 66);
+    private static final int COLOR_TEXT = Color.rgb(224, 255, 248);
+    private static final int COLOR_MUTED = Color.rgb(112, 157, 157);
+    private static final int COLOR_CYAN = Color.rgb(0, 245, 255);
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final ArrayList<StatsSample> samples = new ArrayList<>();
@@ -218,13 +218,13 @@ final class StatsChartView extends View {
 
     private static int colorFor(int selectedMetric) {
         return switch (selectedMetric) {
-            case METRIC_TPS -> Color.rgb(0, 255, 145);
+            case METRIC_TPS -> Color.rgb(57, 255, 136);
             case METRIC_MSPT -> COLOR_CYAN;
-            case METRIC_PROCESS_CPU -> Color.rgb(255, 183, 0);
-            case METRIC_SYSTEM_CPU -> Color.rgb(255, 45, 190);
-            case METRIC_MEMORY -> Color.rgb(255, 75, 105);
-            case METRIC_PLAYERS -> Color.rgb(90, 170, 255);
-            case METRIC_LATENCY -> Color.rgb(190, 135, 255);
+            case METRIC_PROCESS_CPU -> Color.rgb(255, 230, 0);
+            case METRIC_SYSTEM_CPU -> Color.rgb(255, 43, 214);
+            case METRIC_MEMORY -> Color.rgb(255, 49, 102);
+            case METRIC_PLAYERS -> Color.rgb(77, 155, 255);
+            case METRIC_LATENCY -> Color.rgb(193, 116, 255);
             default -> COLOR_TEXT;
         };
     }

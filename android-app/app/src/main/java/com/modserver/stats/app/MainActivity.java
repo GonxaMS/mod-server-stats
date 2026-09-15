@@ -60,27 +60,27 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 15;
-    private static final String CURRENT_VERSION_NAME = "1.14";
+    private static final int CURRENT_VERSION_CODE = 16;
+    private static final String CURRENT_VERSION_NAME = "1.15";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
 
-    // Terminal palette: charcoal surfaces with neon telemetry accents.
-    private static final int COLOR_BACKGROUND = Color.rgb(5, 9, 13);
-    private static final int COLOR_SURFACE = Color.rgb(9, 17, 23);
-    private static final int COLOR_SURFACE_RAISED = Color.rgb(13, 27, 33);
-    private static final int COLOR_BORDER = Color.rgb(24, 69, 77);
-    private static final int COLOR_TRACK = Color.rgb(18, 45, 52);
-    private static final int COLOR_TEXT = Color.rgb(224, 255, 246);
-    private static final int COLOR_MUTED = Color.rgb(126, 165, 158);
-    private static final int COLOR_DIM = Color.rgb(78, 119, 115);
-    private static final int COLOR_CYAN = Color.rgb(0, 238, 214);
-    private static final int COLOR_GREEN = Color.rgb(0, 255, 145);
-    private static final int COLOR_MAGENTA = Color.rgb(255, 45, 190);
-    private static final int COLOR_AMBER = Color.rgb(255, 183, 0);
-    private static final int COLOR_RED = Color.rgb(255, 75, 105);
-    private static final int COLOR_BLUE = Color.rgb(90, 170, 255);
+    // True AMOLED base with high-contrast cyberpunk telemetry accents.
+    private static final int COLOR_BACKGROUND = Color.BLACK;
+    private static final int COLOR_SURFACE = Color.rgb(3, 6, 9);
+    private static final int COLOR_SURFACE_RAISED = Color.rgb(7, 13, 18);
+    private static final int COLOR_BORDER = Color.rgb(0, 83, 96);
+    private static final int COLOR_TRACK = Color.rgb(8, 28, 37);
+    private static final int COLOR_TEXT = Color.rgb(224, 255, 248);
+    private static final int COLOR_MUTED = Color.rgb(112, 157, 157);
+    private static final int COLOR_DIM = Color.rgb(48, 88, 94);
+    private static final int COLOR_CYAN = Color.rgb(0, 245, 255);
+    private static final int COLOR_GREEN = Color.rgb(57, 255, 136);
+    private static final int COLOR_MAGENTA = Color.rgb(255, 43, 214);
+    private static final int COLOR_AMBER = Color.rgb(255, 230, 0);
+    private static final int COLOR_RED = Color.rgb(255, 49, 102);
+    private static final int COLOR_BLUE = Color.rgb(77, 155, 255);
 
     private EditText addressInput;
     private EditText portInput;
@@ -142,9 +142,10 @@ public final class MainActivity extends Activity {
         title.setTextSize(25);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setLetterSpacing(0.04f);
+        title.setShadowLayer(dp(8), 0, 0, COLOR_CYAN);
         header.addView(title, matchWidthWrapHeight());
         TextView subtitle = new TextView(this);
-        subtitle.setText("TERMINAL DE MONITOREO // NODO LOCAL");
+        subtitle.setText("NEON TELEMETRY // NODO LOCAL");
         subtitle.setTextColor(COLOR_MUTED);
         subtitle.setTextSize(14);
         header.addView(subtitle, matchWidthWrapHeight());
@@ -515,7 +516,7 @@ public final class MainActivity extends Activity {
 
     private GradientDrawable headerBackground() {
         return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(4, 18, 25), Color.rgb(7, 48, 53), Color.rgb(19, 12, 34)});
+                new int[]{Color.rgb(0, 8, 14), Color.rgb(0, 28, 38), Color.rgb(24, 0, 33)});
     }
 
     private void configureSystemBars() {
@@ -807,6 +808,7 @@ public final class MainActivity extends Activity {
         valueView.setTextColor(color);
         valueView.setTextSize(20);
         valueView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        valueView.setShadowLayer(dp(5), 0, 0, color);
         tile.addView(valueView, marginParams(dp(2)));
 
         TextView captionView = new TextView(this);
@@ -862,6 +864,7 @@ public final class MainActivity extends Activity {
     private final class StatsProgressView extends View {
         private final float fraction;
         private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         StatsProgressView(double value, int color) {
@@ -870,6 +873,7 @@ public final class MainActivity extends Activity {
                     ? (float) (Math.max(0.0, Math.min(100.0, value)) / 100.0)
                     : 0.0f;
             trackPaint.setColor(COLOR_TRACK);
+            glowPaint.setColor(Color.argb(72, Color.red(color), Color.green(color), Color.blue(color)));
             fillPaint.setColor(color);
             setMinimumHeight(0);
             setMinimumWidth(0);
@@ -890,6 +894,9 @@ public final class MainActivity extends Activity {
             canvas.drawRoundRect(new RectF(0, 0, getWidth(), height), radius, radius, trackPaint);
             float fillWidth = getWidth() * fraction;
             if (fillWidth > 0) {
+                float glowInset = dp(2);
+                canvas.drawRoundRect(new RectF(0, -glowInset, fillWidth,
+                        height + glowInset), radius + glowInset, radius + glowInset, glowPaint);
                 canvas.drawRoundRect(new RectF(0, 0, fillWidth, height), radius, radius, fillPaint);
             }
         }

@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "1.13",
-  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app.apk",
+  "versionCode": 16,
+  "versionName": "1.15",
+  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app-v1.15.apk",
   "releaseNotes": "Interfaz terminal oscura con acentos neón y barras compactas"
 }

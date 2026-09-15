@@ -24,9 +24,9 @@ El selector de gráficos muestra el historial de TPS, MSPT, CPU, memoria, jugado
 
 ## Actualizaciones de la app
 
-La aplicación consulta manualmente un manifiesto estable de Google Drive y descarga desde allí la APK indicada. El mod no necesita actualizarse cuando se publica una nueva versión de la app.
+La aplicación consulta manualmente el manifiesto público de GitHub Releases y descarga desde allí la APK indicada. El enlace está integrado en la app y el mod no necesita actualizarse cuando se publica una nueva versión de la app.
 
-El archivo `update/latest.json` conserva el manifiesto. Para publicar una versión nueva, se reemplaza la APK del archivo de Drive y se actualiza ese manifiesto manteniendo su mismo enlace. Los dos archivos deben estar compartidos como **Cualquiera con el enlace - Lector** para que Android pueda descargarlos sin iniciar sesión.
+Cada Release publica la APK con su versión en el nombre, por ejemplo `mod-server-stats-app-v1.15.apk`, junto con `latest.json`. Las APK de Release se firman con una clave estable para permitir actualizaciones normales.
 
 No uses `localhost` desde el teléfono salvo que el servidor de Minecraft esté ejecutándose en el propio teléfono. Desde el emulador Android, `10.0.2.2` apunta al ordenador anfitrión.
 
