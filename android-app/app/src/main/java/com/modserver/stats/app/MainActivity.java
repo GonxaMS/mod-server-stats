@@ -65,8 +65,8 @@ public final class MainActivity extends Activity {
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
     private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
-    private static final int CURRENT_VERSION_CODE = 20;
-    private static final String CURRENT_VERSION_NAME = "1.19";
+    private static final int CURRENT_VERSION_CODE = 21;
+    private static final String CURRENT_VERSION_NAME = "1.20";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -871,7 +871,9 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     commandInProgress = false;
                     commandSendButton.setEnabled(true);
-                    appendConsoleLine(output.isEmpty() ? "[ok] comando ejecutado sin salida" : output);
+                    if (!output.isEmpty()) {
+                        appendConsoleLine(output);
+                    }
                     commandInput.requestFocus();
                 });
             } catch (Exception error) {
