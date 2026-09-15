@@ -29,17 +29,20 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     private final HistoryStore historyStore;
     private final Path updateDirectory;
     private final boolean consoleEnabled;
+    private final ConsoleLogBuffer consoleLogBuffer;
     private ServerSocket serverSocket;
     private ExecutorService requestExecutor;
     private Thread acceptThread;
 
     public EmbeddedStatsApiServer(MinecraftServer server, AtomicReference<ServerSnapshot> latestSnapshot,
-                                  HistoryStore historyStore, Path updateDirectory, boolean consoleEnabled) {
+                                  HistoryStore historyStore, Path updateDirectory, boolean consoleEnabled,
+                                  ConsoleLogBuffer consoleLogBuffer) {
         this.server = server;
         this.latestSnapshot = latestSnapshot;
         this.historyStore = historyStore;
         this.updateDirectory = updateDirectory;
         this.consoleEnabled = consoleEnabled;
+        this.consoleLogBuffer = consoleLogBuffer;
     }
 
     public synchronized void start(String bindAddress, int port) throws IOException {
@@ -174,6 +177,14 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
                 }
                 return;
             }
+            if ("/api/server/console".equals(path)) {
+                if (consoleLogBuffer == null) {
+                    respond(socket, 404, "Not Found", "{\"error\":\"console_disabled\"}");
+                    return;
+                }
+                respondConsole(socket, requestTarget);
+                return;
+            }
             if ("/api/server/history".equals(path)) {
                 if (historyStore == null) {
                     respond(socket, 404, "Not Found", "{\"error\":\"history_disabled\"}");
@@ -245,6 +256,24 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
         }
         respondBytes(socket, 200, "OK", Files.readAllBytes(apk),
                 "application/vnd.android.package-archive");
+    }
+
+    private void respondConsole(Socket socket, String requestTarget) throws IOException {
+        long after = Math.max(0L, queryLong(requestTarget, "after", 0L));
+        int limit = queryInt(requestTarget, "limit", 80);
+        ConsoleLogBuffer.Snapshot snapshot = consoleLogBuffer.readAfter(after, limit);
+        StringBuilder body = new StringBuilder(256);
+        body.append("{\"cursor\":").append(snapshot.cursor())
+                .append(",\"truncated\":").append(snapshot.truncated())
+                .append(",\"lines\":[");
+        for (int index = 0; index < snapshot.lines().size(); index++) {
+            if (index > 0) body.append(',');
+            ConsoleLogBuffer.ConsoleLine line = snapshot.lines().get(index);
+            body.append("{\"sequence\":").append(line.sequence())
+                    .append(",\"text\":").append(jsonString(line.text())).append('}');
+        }
+        body.append("]}");
+        respond(socket, 200, "OK", body.toString());
     }
 
     private static int queryInt(String requestTarget, String name, int fallback) {

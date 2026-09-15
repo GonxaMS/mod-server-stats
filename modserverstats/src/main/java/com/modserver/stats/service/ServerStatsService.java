@@ -2,6 +2,7 @@ package com.modserver.stats.service;
 
 import com.modserver.stats.ModServerStats;
 import com.modserver.stats.config.ServerStatsConfig;
+import com.modserver.stats.http.ConsoleLogBuffer;
 import com.modserver.stats.http.EmbeddedStatsApiServer;
 import com.modserver.stats.http.TelemetryHttpClient;
 import com.modserver.stats.model.ServerSnapshot;
@@ -22,6 +23,7 @@ public final class ServerStatsService {
     private final AtomicBoolean requestInFlight = new AtomicBoolean();
     private final AtomicReference<ServerSnapshot> latestSnapshot = new AtomicReference<>();
     private volatile EmbeddedStatsApiServer embeddedApi;
+    private volatile ConsoleLogBuffer consoleLogBuffer;
     private volatile HistoryStore historyStore;
 
     @SubscribeEvent
@@ -37,14 +39,24 @@ public final class ServerStatsService {
             }
         }
         if (!ServerStatsConfig.API_ENABLED.getAsBoolean()) return;
+        ConsoleLogBuffer logBuffer = null;
+        if (ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean()) {
+            try {
+                logBuffer = ConsoleLogBuffer.install();
+            } catch (RuntimeException error) {
+                ModServerStats.LOGGER.error("Console log capture could not start: {}", error.getMessage());
+            }
+        }
         try {
             EmbeddedStatsApiServer api = new EmbeddedStatsApiServer(
                     event.getServer(), latestSnapshot, historyStore,
                     FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("updates"),
-                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean());
+                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean(), logBuffer);
             api.start(ServerStatsConfig.API_BIND_ADDRESS.get(), ServerStatsConfig.API_PORT.getAsInt());
             embeddedApi = api;
+            consoleLogBuffer = logBuffer;
         } catch (IOException | RuntimeException error) {
+            if (logBuffer != null) logBuffer.close();
             ModServerStats.LOGGER.error("Embedded Android API could not start on port {}: {}",
                     ServerStatsConfig.API_PORT.getAsInt(), error.getMessage());
         }
@@ -55,6 +67,9 @@ public final class ServerStatsService {
         EmbeddedStatsApiServer api = embeddedApi;
         embeddedApi = null;
         if (api != null) api.close();
+        ConsoleLogBuffer logBuffer = consoleLogBuffer;
+        consoleLogBuffer = null;
+        if (logBuffer != null) logBuffer.close();
         HistoryStore store = historyStore;
         historyStore = null;
         if (store != null) store.close();

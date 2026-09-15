@@ -27,13 +27,18 @@ La API está desactivada por defecto.
 ## Consola CLI (opcional)
 
 Para habilitar la pestaña CLI de la aplicación, cambia `consoleEnabled` a
-`true` dentro de `[api]`. La aplicación podrá enviar comandos como `list`,
-`say mensaje` u `op jugador` y mostrará la respuesta generada por el servidor
-en cada ejecución. La consola remota no tiene autenticación; mantenla
-desactivada salvo durante tus pruebas y no expongas ese puerto a Internet.
+`true` dentro de `[api]`. La aplicación recibirá la salida del servidor en
+tiempo real mientras la pestaña esté abierta y podrá enviar comandos como
+`list`, `say mensaje` u `op jugador`, mostrando también la respuesta generada
+en cada ejecución. El mod conserva las últimas 500 líneas solo en memoria.
+La consola remota no tiene autenticación; mantenla desactivada salvo durante
+tus pruebas y no expongas ese puerto a Internet.
 
-Esta función muestra la salida del comando ejecutado. No transmite todos los
-logs en vivo de la consola de Minecraft.
+La aplicación consulta incrementalmente la salida en:
+
+```text
+http://SERVER_ADDRESS:PORT/api/server/console?after=CURSOR&limit=80
+```
 
 La respuesta incluye `processCpuPercent` para la JVM de Minecraft y
 `systemCpuPercent` para el equipo. Cualquiera puede ser `null` si Java no

@@ -61,8 +61,9 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 17;
-    private static final String CURRENT_VERSION_NAME = "1.16";
+    private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
+    private static final int CURRENT_VERSION_CODE = 18;
+    private static final String CURRENT_VERSION_NAME = "1.17";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -99,6 +100,7 @@ public final class MainActivity extends Activity {
     private EditText commandInput;
     private Button commandSendButton;
     private TextView commandOutputView;
+    private ScrollView consoleScrollView;
     private Switch autoRefreshSwitch;
     private Spinner intervalSpinner;
     private ExecutorService executor;
@@ -119,6 +121,13 @@ public final class MainActivity extends Activity {
     private final ArrayList<StatsSample> history = new ArrayList<>();
     private final StringBuilder consoleTranscript = new StringBuilder();
     private boolean commandInProgress;
+    private Runnable consolePollRunnable;
+    private boolean consoleScreenActive;
+    private boolean consolePolling;
+    private boolean consoleRequestInFlight;
+    private long consoleCursor;
+    private String consoleLoadedForEndpoint;
+    private String consoleLastError;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -202,10 +211,26 @@ public final class MainActivity extends Activity {
 
         View[] allScreens = {statusScreen, historyScreen, consoleScreen, settingsScreen};
         TextView[] allTabs = {statusTab, historyTab, consoleTab, settingsTab};
-        statusTab.setOnClickListener(view -> showScreen(statusScreen, statusTab, allScreens, allTabs));
-        historyTab.setOnClickListener(view -> showScreen(historyScreen, historyTab, allScreens, allTabs));
-        consoleTab.setOnClickListener(view -> showScreen(consoleScreen, consoleTab, allScreens, allTabs));
-        settingsTab.setOnClickListener(view -> showScreen(settingsScreen, settingsTab, allScreens, allTabs));
+        statusTab.setOnClickListener(view -> {
+            consoleScreenActive = false;
+            stopConsolePolling();
+            showScreen(statusScreen, statusTab, allScreens, allTabs);
+        });
+        historyTab.setOnClickListener(view -> {
+            consoleScreenActive = false;
+            stopConsolePolling();
+            showScreen(historyScreen, historyTab, allScreens, allTabs);
+        });
+        consoleTab.setOnClickListener(view -> {
+            consoleScreenActive = true;
+            showScreen(consoleScreen, consoleTab, allScreens, allTabs);
+            startConsolePolling();
+        });
+        settingsTab.setOnClickListener(view -> {
+            consoleScreenActive = false;
+            stopConsolePolling();
+            showScreen(settingsScreen, settingsTab, allScreens, allTabs);
+        });
         showScreen(statusScreen, statusTab, allScreens, allTabs);
         applyTerminalTypeface(root);
         return root;
@@ -299,6 +324,7 @@ public final class MainActivity extends Activity {
 
     private View createConsoleScreen() {
         ScrollView scroll = screenScroll();
+        consoleScrollView = scroll;
         LinearLayout content = screenContent(scroll);
 
         TextView heading = label("REMOTE CONSOLE // OPERATOR");
@@ -306,13 +332,13 @@ public final class MainActivity extends Activity {
         content.addView(heading, matchWidthWrapHeight());
 
         TextView help = new TextView(this);
-        help.setText("Ejecuta comandos del servidor y recibe su salida aqui.");
+        help.setText("Salida en tiempo real + respuesta de tus comandos.");
         help.setTextColor(COLOR_MUTED);
         help.setTextSize(13);
         content.addView(help, marginParams(dp(10)));
 
         LinearLayout outputCard = card();
-        TextView outputTitle = label("SERVER OUTPUT");
+        TextView outputTitle = label("SERVER OUTPUT // LIVE");
         outputTitle.setTextColor(COLOR_GREEN);
         outputCard.addView(outputTitle, matchWidthWrapHeight());
         commandOutputView = new TextView(this);
@@ -823,7 +849,9 @@ public final class MainActivity extends Activity {
                         ? connection.getInputStream() : connection.getErrorStream();
                 String responseBody = responseStream == null ? "" : readResponse(responseStream);
                 if (responseCode < 200 || responseCode >= 300) {
-                    throw new IOException("HTTP " + responseCode);
+                    String errorCode = responseErrorCode(responseBody);
+                    throw new IOException("HTTP " + responseCode
+                            + (errorCode.isEmpty() ? "" : " - " + errorCode));
                 }
 
                 String output = new JSONObject(responseBody).optString("output", "").trim();
@@ -877,6 +905,162 @@ public final class MainActivity extends Activity {
             consoleTranscript.delete(0, consoleTranscript.length() - 12000);
         }
         commandOutputView.setText(consoleTranscript.toString());
+        if (consoleScrollView != null) {
+            consoleScrollView.post(() -> consoleScrollView.fullScroll(View.FOCUS_DOWN));
+        }
+    }
+
+    private void startConsolePolling() {
+        if (consolePolling) return;
+        consolePolling = true;
+        pollConsole();
+    }
+
+    private void stopConsolePolling() {
+        consolePolling = false;
+        if (mainHandler != null && consolePollRunnable != null) {
+            mainHandler.removeCallbacks(consolePollRunnable);
+        }
+        consolePollRunnable = null;
+    }
+
+    private void scheduleConsolePolling() {
+        if (!consolePolling || mainHandler == null) return;
+        if (consolePollRunnable == null) consolePollRunnable = this::pollConsole;
+        mainHandler.postDelayed(consolePollRunnable, CONSOLE_POLL_INTERVAL_MS);
+    }
+
+    private void pollConsole() {
+        if (!consolePolling || consoleRequestInFlight) return;
+        if (addressInput == null || portInput == null) {
+            reportConsoleProblem("configura el servidor en Ajustes");
+            scheduleConsolePolling();
+            return;
+        }
+
+        String address = addressInput.getText().toString().trim();
+        String portText = portInput.getText().toString().trim();
+        if (address.isEmpty()) {
+            reportConsoleProblem("configura la direccion del servidor en Ajustes");
+            scheduleConsolePolling();
+            return;
+        }
+
+        final int port;
+        try {
+            port = Integer.parseInt(portText);
+        } catch (NumberFormatException error) {
+            reportConsoleProblem("el puerto no es valido");
+            scheduleConsolePolling();
+            return;
+        }
+        if (port < 1 || port > 65535) {
+            reportConsoleProblem("el puerto debe estar entre 1 y 65535");
+            scheduleConsolePolling();
+            return;
+        }
+
+        final String endpoint;
+        try {
+            endpoint = buildEndpoint(address, port, "/api/server/console");
+        } catch (IllegalArgumentException error) {
+            reportConsoleProblem(error.getMessage());
+            scheduleConsolePolling();
+            return;
+        }
+
+        if (!endpoint.equals(consoleLoadedForEndpoint)) {
+            consoleLoadedForEndpoint = endpoint;
+            consoleCursor = 0L;
+            consoleLastError = null;
+            consoleTranscript.setLength(0);
+            appendConsoleLine("[ready] live stream conectado al nodo local");
+        }
+
+        final long after = consoleCursor;
+        consoleRequestInFlight = true;
+        executor.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String consoleUrl = endpoint + "?after=" + after + "&limit=80";
+                connection = (HttpURLConnection) new URL(consoleUrl).openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(7000);
+                connection.setUseCaches(false);
+
+                int responseCode = connection.getResponseCode();
+                InputStream responseStream = responseCode >= 200 && responseCode < 300
+                        ? connection.getInputStream() : connection.getErrorStream();
+                String responseBody = responseStream == null ? "" : readResponse(responseStream);
+                if (responseCode < 200 || responseCode >= 300) {
+                    String errorCode = responseErrorCode(responseBody);
+                    throw new IOException("HTTP " + responseCode
+                            + (errorCode.isEmpty() ? "" : " - " + errorCode));
+                }
+
+                JSONObject payload = new JSONObject(responseBody);
+                runOnUiThread(() -> {
+                    consoleRequestInFlight = false;
+                    if (!consolePolling) return;
+                    if (!endpoint.equals(consoleLoadedForEndpoint)) {
+                        scheduleConsolePolling();
+                        return;
+                    }
+
+                    long remoteCursor = payload.optLong("cursor", consoleCursor);
+                    if (remoteCursor < consoleCursor) {
+                        consoleCursor = 0L;
+                        consoleTranscript.setLength(0);
+                        appendConsoleLine("[system] buffer reiniciado; recuperando salida nueva");
+                    } else {
+                        if (payload.optBoolean("truncated", false)) {
+                            consoleTranscript.setLength(0);
+                            appendConsoleLine("[system] mostrando las ultimas lineas disponibles");
+                        }
+                        JSONArray lines = payload.optJSONArray("lines");
+                        if (lines != null) {
+                            for (int index = 0; index < lines.length(); index++) {
+                                JSONObject line = lines.optJSONObject(index);
+                                if (line != null) appendConsoleLine(line.optString("text", ""));
+                            }
+                        }
+                        consoleCursor = remoteCursor;
+                    }
+                    consoleLastError = null;
+                    scheduleConsolePolling();
+                });
+            } catch (Exception error) {
+                String message = error.getMessage();
+                if (message == null || message.trim().isEmpty()) {
+                    message = error.getClass().getSimpleName();
+                }
+                final String errorMessage = message;
+                runOnUiThread(() -> {
+                    consoleRequestInFlight = false;
+                    if (consolePolling) {
+                        reportConsoleProblem(errorMessage);
+                        scheduleConsolePolling();
+                    }
+                });
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        });
+    }
+
+    private void reportConsoleProblem(String message) {
+        if (message == null || message.equals(consoleLastError)) return;
+        consoleLastError = message;
+        appendConsoleLine("[link] " + message);
+    }
+
+    private static String responseErrorCode(String responseBody) {
+        try {
+            return new JSONObject(responseBody).optString("error", "").trim();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private void renderEmptyStats() {
@@ -1533,17 +1717,22 @@ public final class MainActivity extends Activity {
         if (autoRefreshSwitch != null && autoRefreshSwitch.isChecked()) {
             startAutoRefresh();
         }
+        if (consoleScreenActive) {
+            startConsolePolling();
+        }
     }
 
     @Override
     protected void onStop() {
         stopAutoRefresh();
+        stopConsolePolling();
         super.onStop();
     }
 
     @Override
     protected void onDestroy() {
         stopAutoRefresh();
+        stopConsolePolling();
         if (executor != null) {
             executor.shutdownNow();
         }
