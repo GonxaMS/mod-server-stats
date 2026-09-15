@@ -38,13 +38,3 @@ run/
 **/src/generated/**/.cache/
 repo/
 !**/src/**/repo/
-
-### Local project data ###
-server-test/
-mdk-base/
-sources/
-.codex-remote-attachments/
-**/logs/
-**/crash-reports/
-**/world/
-**/*.db

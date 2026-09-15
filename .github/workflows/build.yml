@@ -1,10 +1,20 @@
-name: Build
+name: Build mod and Android app
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  build-mod:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: modserverstats
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,5 +31,57 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Build with Gradle
-        run: ./gradlew build
+        run: |
+          export JAVA21_HOME="$JAVA_HOME"
+          ./gradlew build
+
+      - name: Upload NeoForge mod JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-server-stats-neoforge-jar
+          path: modserverstats/build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 30
+
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build Android APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-server-stats-android-apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
