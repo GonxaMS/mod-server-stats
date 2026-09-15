@@ -1,6 +1,6 @@
 {
-  "versionCode": 10,
-  "versionName": "1.9",
-  "downloadUrl": "https://drive.usercontent.google.com/download?id=10LlpLlLtcmTzBUutitU50nQKX7yJyKDy&export=download&confirm=t",
-  "releaseNotes": "Barras de uso dibujadas con altura fija y sin espacios verticales inesperados"
+  "versionCode": 11,
+  "versionName": "1.10",
+  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app.apk",
+  "releaseNotes": "Actualizaciones controladas desde GitHub Releases"
 }

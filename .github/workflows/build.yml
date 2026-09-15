@@ -104,6 +104,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download mod artifact
         uses: actions/download-artifact@v4
         with:
@@ -115,6 +118,21 @@ jobs:
         with:
           name: mod-server-stats-android-apk
           path: release
+
+      - name: Prepare release assets and manifest
+        shell: bash
+        run: |
+          final_jar=$(find release -maxdepth 1 -type f -name '*.jar' ! -name '*-dev.jar' | head -n 1)
+          test -n "$final_jar"
+          mv "$final_jar" release/mod-server-stats-neoforge.jar
+          find release -maxdepth 1 -type f -name '*-dev.jar' -delete
+          mv release/app-debug.apk release/mod-server-stats-app.apk
+          version_code=$(sed -nE 's/.*versionCode[[:space:]]+([0-9]+).*/\1/p' android-app/app/build.gradle | head -n 1)
+          version_name=$(sed -nE "s/.*versionName[[:space:]]+'([^']+)'.*/\1/p" android-app/app/build.gradle | head -n 1)
+          test -n "$version_code"
+          test -n "$version_name"
+          printf '{\n  "versionCode": %s,\n  "versionName": "%s",\n  "downloadUrl": "https://github.com/%s/releases/latest/download/mod-server-stats-app.apk",\n  "releaseNotes": "Versión publicada desde GitHub Releases"\n}\n' \
+            "$version_code" "$version_name" "$GITHUB_REPOSITORY" > release/latest.json
 
       - name: Publish GitHub Release
         env:

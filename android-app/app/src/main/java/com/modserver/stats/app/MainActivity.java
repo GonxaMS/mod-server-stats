@@ -58,9 +58,11 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 10;
-    private static final String CURRENT_VERSION_NAME = "1.9";
+    private static final int CURRENT_VERSION_CODE = 11;
+    private static final String CURRENT_VERSION_NAME = "1.10";
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
+            "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
+    private static final String LEGACY_UPDATE_MANIFEST_URL =
             "https://drive.google.com/uc?export=download&id=1pKcteK4bgqGmTR_kWUK9vS9yQ2iWv0sy";
 
     private EditText addressInput;
@@ -362,10 +364,15 @@ public final class MainActivity extends Activity {
         updateManifestInput.setTextSize(12);
         updateManifestInput.setSelectAllOnFocus(true);
         updateManifestInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        updateManifestInput.setText(preferences.getString("updateManifestUrl", DEFAULT_UPDATE_MANIFEST_URL));
+        String savedUpdateUrl = preferences.getString("updateManifestUrl", "");
+        if (savedUpdateUrl.isEmpty() || LEGACY_UPDATE_MANIFEST_URL.equals(savedUpdateUrl)) {
+            savedUpdateUrl = DEFAULT_UPDATE_MANIFEST_URL;
+            preferences.edit().putString("updateManifestUrl", savedUpdateUrl).apply();
+        }
+        updateManifestInput.setText(savedUpdateUrl);
         updateCard.addView(updateManifestInput, matchWidthWrapHeight());
         TextView sourceHelp = new TextView(this);
-        sourceHelp.setText("Google Drive · archivos compartidos como Cualquiera con el enlace.");
+        sourceHelp.setText("GitHub Releases · la versión se controla desde la Release más reciente.");
         sourceHelp.setTextColor(Color.rgb(105, 115, 125));
         sourceHelp.setTextSize(12);
         updateCard.addView(sourceHelp, marginParams(dp(5)));
@@ -1048,7 +1055,7 @@ public final class MainActivity extends Activity {
                 String contentType = connection.getHeaderField("Content-Type");
                 if ((contentType != null && contentType.toLowerCase(Locale.ROOT).contains("text/html"))
                         || responseBody.trim().startsWith("<")) {
-                    throw new IOException("Drive privado");
+                    throw new IOException("Página HTML");
                 }
                 JSONObject update = new JSONObject(responseBody);
                 int remoteVersionCode = update.optInt("versionCode", 0);
@@ -1076,9 +1083,9 @@ public final class MainActivity extends Activity {
                     }
                 });
             } catch (Exception ignored) {
-                String message = "Drive privado".equals(ignored.getMessage())
-                        ? "Drive no es público. Comparte manifiesto y APK con el enlace."
-                        : "No se pudo consultar Google Drive.";
+                String message = "Página HTML".equals(ignored.getMessage())
+                        ? "GitHub no devolvió el manifiesto JSON de la Release."
+                        : "No se pudo consultar GitHub Releases.";
                 runOnUiThread(() -> {
                     updateCheckInFlight = false;
                     updateCheckedForEndpoint = manifestUrl;
