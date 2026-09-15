@@ -65,8 +65,8 @@ public final class MainActivity extends Activity {
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
     private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
-    private static final int CURRENT_VERSION_CODE = 21;
-    private static final String CURRENT_VERSION_NAME = "1.20";
+    private static final int CURRENT_VERSION_CODE = 22;
+    private static final String CURRENT_VERSION_NAME = "1.21";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -162,11 +162,6 @@ public final class MainActivity extends Activity {
         title.setLetterSpacing(0.04f);
         title.setShadowLayer(dp(8), 0, 0, COLOR_CYAN);
         header.addView(title, matchWidthWrapHeight());
-        TextView subtitle = new TextView(this);
-        subtitle.setText("NEON TELEMETRY // NODO LOCAL");
-        subtitle.setTextColor(COLOR_MUTED);
-        subtitle.setTextSize(14);
-        header.addView(subtitle, matchWidthWrapHeight());
         root.addView(header, matchWidthWrapHeight());
 
         LinearLayout navigation = new LinearLayout(this);
@@ -248,7 +243,7 @@ public final class MainActivity extends Activity {
         content.addView(eyebrow, matchWidthWrapHeight());
 
         statusView = new TextView(this);
-        statusView.setText("Sin conexión. Configura el servidor y pulsa actualizar.");
+        statusView.setText("Sin conexión.");
         statusView.setTextColor(COLOR_MUTED);
         statusView.setTextSize(14);
         statusView.setGravity(Gravity.CENTER_VERTICAL);
@@ -279,11 +274,6 @@ public final class MainActivity extends Activity {
         chartTitle = label("Historial");
         chartTitle.setTextSize(20);
         content.addView(chartTitle, matchWidthWrapHeight());
-        TextView rangeHelp = new TextView(this);
-        rangeHelp.setText("Consulta cualquier fecha y hora guardada en el servidor.");
-        rangeHelp.setTextColor(COLOR_MUTED);
-        rangeHelp.setTextSize(13);
-        content.addView(rangeHelp, marginParams(dp(10)));
 
         LinearLayout rangeCard = card();
         historyStartButton = actionButton("DESDE", COLOR_SURFACE_RAISED);
@@ -333,12 +323,6 @@ public final class MainActivity extends Activity {
         heading.setTextSize(20);
         content.addView(heading, matchWidthWrapHeight());
 
-        TextView help = new TextView(this);
-        help.setText("Salida en tiempo real + respuesta de tus comandos.");
-        help.setTextColor(COLOR_MUTED);
-        help.setTextSize(13);
-        content.addView(help, marginParams(dp(10)));
-
         LinearLayout outputCard = card();
         TextView outputTitle = label("SERVER OUTPUT // LIVE");
         outputTitle.setTextColor(COLOR_GREEN);
@@ -365,11 +349,9 @@ public final class MainActivity extends Activity {
         outputScrollParams.bottomMargin = dp(2);
         outputCard.addView(consoleOutputScrollView, outputScrollParams);
         content.addView(outputCard, cardParams(dp(12)));
-        appendConsoleLine("[ready] consola conectada al nodo local");
 
         commandInput = new EditText(this);
         commandInput.setSingleLine(true);
-        commandInput.setHint("list / op jugador / say mensaje");
         commandInput.setInputType(InputType.TYPE_CLASS_TEXT
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         styleInput(commandInput);
@@ -378,12 +360,6 @@ public final class MainActivity extends Activity {
         commandSendButton = actionButton("[ EJECUTAR COMANDO ]", COLOR_MAGENTA);
         commandSendButton.setOnClickListener(view -> sendCommand());
         content.addView(commandSendButton, marginParams(dp(12)));
-
-        TextView warning = new TextView(this);
-        warning.setText("Sin autenticacion: activa api.consoleEnabled solo en tu servidor de pruebas.");
-        warning.setTextColor(COLOR_AMBER);
-        warning.setTextSize(12);
-        content.addView(warning, matchWidthWrapHeight());
         return scroll;
     }
 
@@ -393,26 +369,15 @@ public final class MainActivity extends Activity {
         TextView heading = label("AJUSTES DE CONEXIÓN");
         heading.setTextSize(20);
         content.addView(heading, matchWidthWrapHeight());
-        TextView help = new TextView(this);
-        help.setText("Estos datos se guardan solo en este teléfono.");
-        help.setTextColor(COLOR_MUTED);
-        help.setTextSize(13);
-        content.addView(help, marginParams(dp(10)));
 
         LinearLayout connectionCard = card();
         connectionCard.addView(label("Dirección del servidor"), matchWidthWrapHeight());
         addressInput = new EditText(this);
         addressInput.setSingleLine(true);
-        addressInput.setHint("192.168.1.50 o dominio");
         addressInput.setText(preferences.getString("address", ""));
         addressInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         styleInput(addressInput);
         connectionCard.addView(addressInput, marginParams(dp(4)));
-        TextView addressHelp = new TextView(this);
-        addressHelp.setText("IP, dominio o localhost");
-        addressHelp.setTextColor(COLOR_MUTED);
-        addressHelp.setTextSize(12);
-        connectionCard.addView(addressHelp, marginParams(dp(12)));
         connectionCard.addView(label("Puerto de la API"), marginParams(dp(8)));
         portInput = new EditText(this);
         portInput.setSingleLine(true);
@@ -420,11 +385,6 @@ public final class MainActivity extends Activity {
         portInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         styleInput(portInput);
         connectionCard.addView(portInput, marginParams(dp(4)));
-        TextView portHelp = new TextView(this);
-        portHelp.setText("Debe coincidir con api.port del mod");
-        portHelp.setTextColor(COLOR_MUTED);
-        portHelp.setTextSize(12);
-        connectionCard.addView(portHelp, marginParams(dp(12)));
         content.addView(connectionCard, cardParams(dp(14)));
 
         LinearLayout refreshCard = card();
@@ -478,7 +438,7 @@ public final class MainActivity extends Activity {
         updateTitle.setTextColor(COLOR_CYAN);
         updateCard.addView(updateTitle, matchWidthWrapHeight());
         updateView = new TextView(this);
-        updateView.setText("Pulsa buscar para comprobar si hay una versión nueva.");
+        updateView.setText("Versión instalada: " + CURRENT_VERSION_NAME);
         updateView.setTextColor(COLOR_MUTED);
         updateView.setTextSize(13);
         updateCard.addView(updateView, marginParams(dp(6)));
@@ -1007,7 +967,6 @@ public final class MainActivity extends Activity {
             consoleCursor = 0L;
             consoleLastError = null;
             consoleTranscript.setLength(0);
-            appendConsoleLine("[ready] live stream conectado al nodo local");
         }
 
         final long after = consoleCursor;
@@ -1045,11 +1004,9 @@ public final class MainActivity extends Activity {
                     if (remoteCursor < consoleCursor) {
                         consoleCursor = 0L;
                         consoleTranscript.setLength(0);
-                        appendConsoleLine("[system] buffer reiniciado; recuperando salida nueva");
                     } else {
                         if (payload.optBoolean("truncated", false)) {
                             consoleTranscript.setLength(0);
-                            appendConsoleLine("[system] mostrando las ultimas lineas disponibles");
                         }
                         JSONArray lines = payload.optJSONArray("lines");
                         if (lines != null) {
@@ -1099,7 +1056,7 @@ public final class MainActivity extends Activity {
     private void renderEmptyStats() {
         statsContainer.removeAllViews();
         TextView empty = new TextView(this);
-        empty.setText("Aquí aparecerán las estadísticas del servidor.");
+        empty.setText("SIN DATOS");
         empty.setTextColor(COLOR_MUTED);
         empty.setTextSize(14);
         statsContainer.addView(empty, matchWidthWrapHeight());
@@ -1119,12 +1076,12 @@ public final class MainActivity extends Activity {
 
         LinearLayout headline = new LinearLayout(this);
         headline.setOrientation(LinearLayout.HORIZONTAL);
-        headline.addView(metricTile("TPS", formatNumber(tps, 2), tpsStatus(tps), tpsColor),
+        headline.addView(metricTile("TPS", formatNumber(tps, 2), tpsColor),
                 metricTileParams(true));
-        headline.addView(metricTile("MSPT", formatNumber(mspt, 1) + " ms", "objetivo < 50 ms", msptColor),
+        headline.addView(metricTile("MSPT", formatNumber(mspt, 1) + " ms", msptColor),
                 metricTileParams(false));
-        headline.addView(metricTile("JUGADORES", onlinePlayers + "/" + maxPlayers, "conectados",
-                        COLOR_CYAN), metricTileParams(false));
+        headline.addView(metricTile("JUGADORES", onlinePlayers + "/" + maxPlayers, COLOR_CYAN),
+                metricTileParams(false));
         statsContainer.addView(headline, marginParams(dp(12)));
 
         double processCpu = json.optDouble("processCpuPercent", -1.0);
@@ -1180,7 +1137,7 @@ public final class MainActivity extends Activity {
         statsContainer.addView(players, matchWidthWrapHeight());
     }
 
-    private LinearLayout metricTile(String title, String value, String caption, int color) {
+    private LinearLayout metricTile(String title, String value, int color) {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setPadding(dp(11), dp(10), dp(11), dp(10));
@@ -1201,11 +1158,6 @@ public final class MainActivity extends Activity {
         valueView.setShadowLayer(dp(5), 0, 0, color);
         tile.addView(valueView, marginParams(dp(2)));
 
-        TextView captionView = new TextView(this);
-        captionView.setText(caption);
-        captionView.setTextColor(COLOR_MUTED);
-        captionView.setTextSize(11);
-        tile.addView(captionView, matchWidthWrapHeight());
         return tile;
     }
 
@@ -1341,16 +1293,6 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         if (!first) params.leftMargin = dp(8);
         return params;
-    }
-
-    private static String tpsStatus(double tps) {
-        if (tps >= 19.0) {
-            return "estable";
-        }
-        if (tps >= 15.0) {
-            return "degradado";
-        }
-        return "lento";
     }
 
     private static String formatPercent(double value) {
