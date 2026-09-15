@@ -6,6 +6,7 @@ import android.app.TimePickerDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -23,6 +24,7 @@ import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -58,10 +60,26 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 13;
-    private static final String CURRENT_VERSION_NAME = "1.12";
+    private static final int CURRENT_VERSION_CODE = 14;
+    private static final String CURRENT_VERSION_NAME = "1.13";
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
+
+    // Terminal palette: charcoal surfaces with neon telemetry accents.
+    private static final int COLOR_BACKGROUND = Color.rgb(5, 9, 13);
+    private static final int COLOR_SURFACE = Color.rgb(9, 17, 23);
+    private static final int COLOR_SURFACE_RAISED = Color.rgb(13, 27, 33);
+    private static final int COLOR_BORDER = Color.rgb(24, 69, 77);
+    private static final int COLOR_TRACK = Color.rgb(18, 45, 52);
+    private static final int COLOR_TEXT = Color.rgb(224, 255, 246);
+    private static final int COLOR_MUTED = Color.rgb(126, 165, 158);
+    private static final int COLOR_DIM = Color.rgb(78, 119, 115);
+    private static final int COLOR_CYAN = Color.rgb(0, 238, 214);
+    private static final int COLOR_GREEN = Color.rgb(0, 255, 145);
+    private static final int COLOR_MAGENTA = Color.rgb(255, 45, 190);
+    private static final int COLOR_AMBER = Color.rgb(255, 183, 0);
+    private static final int COLOR_RED = Color.rgb(255, 75, 105);
+    private static final int COLOR_BLUE = Color.rgb(90, 170, 255);
 
     private EditText addressInput;
     private EditText portInput;
@@ -110,29 +128,30 @@ public final class MainActivity extends Activity {
     private View createContentView() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(244, 247, 251));
+        root.setBackgroundColor(COLOR_BACKGROUND);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(22), dp(14), dp(22), dp(18));
         header.setBackground(headerBackground());
         TextView title = new TextView(this);
-        title.setText("Mod Server Stats");
-        title.setTextColor(Color.WHITE);
+        title.setText("MOD SERVER STATS");
+        title.setTextColor(COLOR_CYAN);
         title.setTextSize(25);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setLetterSpacing(0.04f);
         header.addView(title, matchWidthWrapHeight());
         TextView subtitle = new TextView(this);
-        subtitle.setText("Tu servidor, en una mirada");
-        subtitle.setTextColor(Color.rgb(218, 232, 248));
+        subtitle.setText("TERMINAL DE MONITOREO // NODO LOCAL");
+        subtitle.setTextColor(COLOR_MUTED);
         subtitle.setTextSize(14);
         header.addView(subtitle, matchWidthWrapHeight());
         root.addView(header, matchWidthWrapHeight());
 
         LinearLayout navigation = new LinearLayout(this);
         navigation.setPadding(dp(10), dp(8), dp(10), dp(8));
-        navigation.setBackgroundColor(Color.WHITE);
-        navigation.setElevation(dp(2));
+        navigation.setBackground(roundBackground(COLOR_SURFACE, COLOR_BORDER, 0));
+        navigation.setElevation(0);
         TextView statusTab = navigationButton("Estado");
         TextView historyTab = navigationButton("Historial");
         TextView settingsTab = navigationButton("Ajustes");
@@ -174,6 +193,7 @@ public final class MainActivity extends Activity {
         historyTab.setOnClickListener(view -> showScreen(historyScreen, historyTab, allScreens, allTabs));
         settingsTab.setOnClickListener(view -> showScreen(settingsScreen, settingsTab, allScreens, allTabs));
         showScreen(statusScreen, statusTab, allScreens, allTabs);
+        applyTerminalTypeface(root);
         return root;
     }
 
@@ -182,24 +202,25 @@ public final class MainActivity extends Activity {
         LinearLayout content = screenContent(scroll);
 
         TextView eyebrow = label("ESTADO DEL SERVIDOR");
-        eyebrow.setTextColor(Color.rgb(38, 101, 165));
+        eyebrow.setTextColor(COLOR_CYAN);
         content.addView(eyebrow, matchWidthWrapHeight());
 
         statusView = new TextView(this);
         statusView.setText("Sin conexión. Configura el servidor y pulsa actualizar.");
-        statusView.setTextColor(Color.rgb(90, 100, 110));
+        statusView.setTextColor(COLOR_MUTED);
         statusView.setTextSize(14);
         statusView.setGravity(Gravity.CENTER_VERTICAL);
         statusView.setPadding(dp(16), dp(14), dp(16), dp(14));
+        statusView.setBackground(roundBackground(COLOR_SURFACE_RAISED, COLOR_BORDER, 12));
         content.addView(statusView, cardParams(dp(12)));
 
-        refreshButton = actionButton("Actualizar métricas", Color.rgb(38, 101, 165));
+        refreshButton = actionButton("[ ACTUALIZAR MÉTRICAS ]", COLOR_CYAN);
         refreshButton.setOnClickListener(view -> refreshStats());
         content.addView(refreshButton, marginParams(dp(14)));
 
         LinearLayout statsCard = card();
         TextView statsTitle = label("MÉTRICAS EN TIEMPO REAL");
-        statsTitle.setTextColor(Color.rgb(38, 101, 165));
+        statsTitle.setTextColor(COLOR_CYAN);
         statsCard.addView(statsTitle, matchWidthWrapHeight());
         statsContainer = new LinearLayout(this);
         statsContainer.setOrientation(LinearLayout.VERTICAL);
@@ -218,18 +239,18 @@ public final class MainActivity extends Activity {
         content.addView(chartTitle, matchWidthWrapHeight());
         TextView rangeHelp = new TextView(this);
         rangeHelp.setText("Consulta cualquier fecha y hora guardada en el servidor.");
-        rangeHelp.setTextColor(Color.rgb(105, 115, 125));
+        rangeHelp.setTextColor(COLOR_MUTED);
         rangeHelp.setTextSize(13);
         content.addView(rangeHelp, marginParams(dp(10)));
 
         LinearLayout rangeCard = card();
-        historyStartButton = actionButton("Desde", Color.rgb(74, 91, 111));
+        historyStartButton = actionButton("DESDE", COLOR_SURFACE_RAISED);
         historyStartButton.setOnClickListener(view -> pickHistoryDateTime(true));
         rangeCard.addView(historyStartButton, matchWidthWrapHeight());
-        historyEndButton = actionButton("Hasta", Color.rgb(74, 91, 111));
+        historyEndButton = actionButton("HASTA", COLOR_SURFACE_RAISED);
         historyEndButton.setOnClickListener(view -> pickHistoryDateTime(false));
         rangeCard.addView(historyEndButton, marginParams(dp(8)));
-        loadHistoryButton = actionButton("Cargar este periodo", Color.rgb(38, 101, 165));
+        loadHistoryButton = actionButton("[ CARGAR PERÍODO ]", COLOR_CYAN);
         loadHistoryButton.setOnClickListener(view -> loadSelectedHistory());
         rangeCard.addView(loadHistoryButton, marginParams(dp(10)));
         content.addView(rangeCard, cardParams(dp(14)));
@@ -238,10 +259,9 @@ public final class MainActivity extends Activity {
         Spinner chartMetricSpinner = new Spinner(this);
         String[] chartMetrics = {"TPS", "MSPT", "CPU de Minecraft", "CPU del equipo", "Memoria",
                 "Jugadores", "Tiempo de respuesta"};
-        ArrayAdapter<String> chartMetricAdapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_item, chartMetrics);
-        chartMetricAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> chartMetricAdapter = terminalSpinnerAdapter(chartMetrics);
         chartMetricSpinner.setAdapter(chartMetricAdapter);
+        styleSpinner(chartMetricSpinner);
         content.addView(chartMetricSpinner, marginParams(dp(10)));
 
         LinearLayout chartCard = card();
@@ -271,7 +291,7 @@ public final class MainActivity extends Activity {
         content.addView(heading, matchWidthWrapHeight());
         TextView help = new TextView(this);
         help.setText("Estos datos se guardan solo en este teléfono.");
-        help.setTextColor(Color.rgb(105, 115, 125));
+        help.setTextColor(COLOR_MUTED);
         help.setTextSize(13);
         content.addView(help, marginParams(dp(10)));
 
@@ -282,10 +302,11 @@ public final class MainActivity extends Activity {
         addressInput.setHint("192.168.1.50 o dominio");
         addressInput.setText(preferences.getString("address", ""));
         addressInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        styleInput(addressInput);
         connectionCard.addView(addressInput, marginParams(dp(4)));
         TextView addressHelp = new TextView(this);
         addressHelp.setText("IP, dominio o localhost");
-        addressHelp.setTextColor(Color.rgb(105, 115, 125));
+        addressHelp.setTextColor(COLOR_MUTED);
         addressHelp.setTextSize(12);
         connectionCard.addView(addressHelp, marginParams(dp(12)));
         connectionCard.addView(label("Puerto de la API"), marginParams(dp(8)));
@@ -293,17 +314,18 @@ public final class MainActivity extends Activity {
         portInput.setSingleLine(true);
         portInput.setText(preferences.getString("port", DEFAULT_PORT));
         portInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        styleInput(portInput);
         connectionCard.addView(portInput, marginParams(dp(4)));
         TextView portHelp = new TextView(this);
         portHelp.setText("Debe coincidir con api.port del mod");
-        portHelp.setTextColor(Color.rgb(105, 115, 125));
+        portHelp.setTextColor(COLOR_MUTED);
         portHelp.setTextSize(12);
         connectionCard.addView(portHelp, marginParams(dp(12)));
         content.addView(connectionCard, cardParams(dp(14)));
 
         LinearLayout refreshCard = card();
         TextView refreshTitle = label("ACTUALIZACIÓN DE MÉTRICAS");
-        refreshTitle.setTextColor(Color.rgb(38, 101, 165));
+        refreshTitle.setTextColor(COLOR_CYAN);
         refreshCard.addView(refreshTitle, matchWidthWrapHeight());
         LinearLayout autoRefreshRow = new LinearLayout(this);
         autoRefreshRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -311,15 +333,14 @@ public final class MainActivity extends Activity {
         autoRefreshSwitch = new Switch(this);
         autoRefreshSwitch.setText("Actualizar métricas automáticamente");
         autoRefreshSwitch.setTextSize(14);
-        autoRefreshSwitch.setTextColor(Color.rgb(45, 55, 65));
+        autoRefreshSwitch.setTextColor(COLOR_TEXT);
         autoRefreshRow.addView(autoRefreshSwitch, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         intervalSpinner = new Spinner(this);
         String[] intervalLabels = {"5 s", "10 s", "30 s", "60 s"};
-        ArrayAdapter<String> intervalAdapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_item, intervalLabels);
-        intervalAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> intervalAdapter = terminalSpinnerAdapter(intervalLabels);
         intervalSpinner.setAdapter(intervalAdapter);
+        styleSpinner(intervalSpinner);
         intervalSpinner.setSelection(preferences.getInt("intervalIndex", 1));
         autoRefreshRow.addView(intervalSpinner, new LinearLayout.LayoutParams(
                 dp(78), LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -350,17 +371,17 @@ public final class MainActivity extends Activity {
     private LinearLayout createUpdateCard() {
         LinearLayout updateCard = card();
         TextView updateTitle = label("ACTUALIZACIONES");
-        updateTitle.setTextColor(Color.rgb(38, 101, 165));
+        updateTitle.setTextColor(COLOR_CYAN);
         updateCard.addView(updateTitle, matchWidthWrapHeight());
         updateView = new TextView(this);
         updateView.setText("Pulsa buscar para comprobar si hay una versión nueva.");
-        updateView.setTextColor(Color.rgb(90, 100, 110));
+        updateView.setTextColor(COLOR_MUTED);
         updateView.setTextSize(13);
         updateCard.addView(updateView, marginParams(dp(6)));
-        searchUpdateButton = actionButton("Buscar actualización", Color.rgb(232, 157, 49));
+        searchUpdateButton = actionButton("[ BUSCAR ACTUALIZACIÓN ]", COLOR_MAGENTA);
         searchUpdateButton.setOnClickListener(view -> searchForUpdate());
         updateCard.addView(searchUpdateButton, marginParams(dp(10)));
-        updateButton = actionButton("Instalar actualización", Color.rgb(43, 145, 95));
+        updateButton = actionButton("[ INSTALAR ACTUALIZACIÓN ]", COLOR_GREEN);
         updateButton.setVisibility(View.GONE);
         updateButton.setOnClickListener(view -> downloadAndInstallUpdate());
         updateCard.addView(updateButton, matchWidthWrapHeight());
@@ -370,7 +391,7 @@ public final class MainActivity extends Activity {
     private ScrollView screenScroll() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setBackgroundColor(Color.rgb(244, 247, 251));
+        scroll.setBackgroundColor(COLOR_BACKGROUND);
         return scroll;
     }
 
@@ -386,8 +407,8 @@ public final class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackground(roundBackground(Color.WHITE, Color.rgb(226, 232, 240), 18));
-        card.setElevation(dp(2));
+        card.setBackground(roundBackground(COLOR_SURFACE, COLOR_BORDER, 14));
+        card.setElevation(0);
         return card;
     }
 
@@ -395,12 +416,75 @@ public final class MainActivity extends Activity {
         Button button = new Button(this);
         button.setText(text);
         button.setTextSize(14);
-        button.setTextColor(Color.WHITE);
+        button.setTextColor(isBrightButton(color) ? COLOR_BACKGROUND : COLOR_TEXT);
         button.setAllCaps(false);
         button.setMinHeight(dp(46));
         button.setPadding(dp(14), dp(4), dp(14), dp(4));
-        button.setBackground(roundBackground(color, color, 14));
+        button.setBackground(roundBackground(color,
+                isBrightButton(color) ? color : COLOR_BORDER, 10));
         return button;
+    }
+
+    private boolean isBrightButton(int color) {
+        return color == COLOR_CYAN || color == COLOR_GREEN
+                || color == COLOR_MAGENTA || color == COLOR_AMBER;
+    }
+
+    private void styleInput(EditText input) {
+        input.setTextColor(COLOR_TEXT);
+        input.setHintTextColor(COLOR_DIM);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            input.setBackgroundTintList(ColorStateList.valueOf(COLOR_CYAN));
+        }
+    }
+
+    private void styleSpinner(Spinner spinner) {
+        spinner.setBackground(roundBackground(COLOR_SURFACE_RAISED, COLOR_BORDER, 8));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            spinner.setPopupBackgroundDrawable(roundBackground(COLOR_SURFACE_RAISED,
+                    COLOR_CYAN, 8));
+        }
+    }
+
+    private ArrayAdapter<String> terminalSpinnerAdapter(String[] values) {
+        return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, values) {
+            @Override
+            public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                TextView view = (TextView) super.getView(position, convertView, parent);
+                view.setTextColor(COLOR_TEXT);
+                view.setTextSize(13);
+                view.setTypeface(Typeface.MONOSPACE);
+                view.setPadding(dp(10), 0, dp(10), 0);
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, View convertView,
+                                        android.view.ViewGroup parent) {
+                TextView view = (TextView) super.getDropDownView(position, convertView, parent);
+                view.setTextColor(COLOR_CYAN);
+                view.setTextSize(13);
+                view.setTypeface(Typeface.MONOSPACE);
+                view.setPadding(dp(12), dp(10), dp(12), dp(10));
+                view.setBackgroundColor(COLOR_SURFACE_RAISED);
+                return view;
+            }
+        };
+    }
+
+    private void applyTerminalTypeface(View view) {
+        if (view instanceof TextView) {
+            TextView textView = (TextView) view;
+            int style = textView.getTypeface() != null && textView.getTypeface().isBold()
+                    ? Typeface.BOLD : Typeface.NORMAL;
+            textView.setTypeface(Typeface.MONOSPACE, style);
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int index = 0; index < group.getChildCount(); index++) {
+                applyTerminalTypeface(group.getChildAt(index));
+            }
+        }
     }
 
     private TextView navigationButton(String text) {
@@ -412,6 +496,7 @@ public final class MainActivity extends Activity {
         tab.setPadding(dp(4), 0, dp(4), 0);
         tab.setClickable(true);
         tab.setFocusable(true);
+        tab.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         return tab;
     }
 
@@ -419,16 +504,16 @@ public final class MainActivity extends Activity {
         for (View screen : screens) screen.setVisibility(screen == active ? View.VISIBLE : View.GONE);
         for (TextView tab : tabs) {
             boolean selected = tab == activeTab;
-            tab.setTextColor(selected ? Color.rgb(38, 101, 165) : Color.rgb(100, 112, 126));
+            tab.setTextColor(selected ? COLOR_CYAN : COLOR_MUTED);
             tab.setBackground(selected
-                    ? roundBackground(Color.rgb(232, 241, 251), Color.rgb(232, 241, 251), 12)
-                    : roundBackground(Color.WHITE, Color.WHITE, 12));
+                    ? roundBackground(COLOR_SURFACE_RAISED, COLOR_CYAN, 10)
+                    : roundBackground(COLOR_SURFACE, COLOR_SURFACE, 10));
         }
     }
 
     private GradientDrawable headerBackground() {
         return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(24, 71, 125), Color.rgb(47, 130, 173)});
+                new int[]{Color.rgb(4, 18, 25), Color.rgb(7, 48, 53), Color.rgb(19, 12, 34)});
     }
 
     private void configureSystemBars() {
@@ -436,14 +521,14 @@ public final class MainActivity extends Activity {
             getWindow().setDecorFitsSystemWindows(false);
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(Color.rgb(24, 71, 125));
-            getWindow().setNavigationBarColor(Color.rgb(244, 247, 251));
+            getWindow().setStatusBarColor(COLOR_BACKGROUND);
+            getWindow().setNavigationBarColor(COLOR_BACKGROUND);
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             int flags = getWindow().getDecorView().getSystemUiVisibility();
             flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
             }
             getWindow().getDecorView().setSystemUiVisibility(flags);
         }
@@ -482,9 +567,9 @@ public final class MainActivity extends Activity {
     private TextView label(String text) {
         TextView label = new TextView(this);
         label.setText(text);
-        label.setTextColor(Color.rgb(45, 55, 65));
+        label.setTextColor(COLOR_CYAN);
         label.setTextSize(14);
-        label.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        label.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         return label;
     }
 
@@ -526,7 +611,7 @@ public final class MainActivity extends Activity {
         requestInProgress = true;
         refreshButton.setEnabled(false);
         statusView.setText("Conectando…");
-        statusView.setTextColor(Color.rgb(90, 100, 110));
+        statusView.setTextColor(COLOR_MUTED);
         final long requestStartedAt = SystemClock.elapsedRealtime();
 
         executor.execute(() -> {
@@ -554,7 +639,7 @@ public final class MainActivity extends Activity {
                     requestInProgress = false;
                     refreshButton.setEnabled(true);
                     statusView.setText("Conectado · " + latencyMs + " ms · " + currentTimeLabel());
-                    statusView.setTextColor(Color.rgb(35, 125, 70));
+                    statusView.setTextColor(COLOR_GREEN);
                     renderStats(json, latencyMs);
                     StatsSample latestSample = StatsSample.fromJson(json, latencyMs);
                     addHistorySample(latestSample);
@@ -622,7 +707,7 @@ public final class MainActivity extends Activity {
         statsContainer.removeAllViews();
         TextView empty = new TextView(this);
         empty.setText("Aquí aparecerán las estadísticas del servidor.");
-        empty.setTextColor(Color.rgb(105, 115, 125));
+        empty.setTextColor(COLOR_MUTED);
         empty.setTextSize(14);
         statsContainer.addView(empty, matchWidthWrapHeight());
     }
@@ -634,10 +719,10 @@ public final class MainActivity extends Activity {
         double mspt = json.optDouble("mspt", 0.0);
         int onlinePlayers = json.optInt("onlinePlayers", 0);
         int maxPlayers = json.optInt("maxPlayers", 0);
-        int tpsColor = tps >= 19.0 ? Color.rgb(35, 125, 70)
-                : (tps >= 15.0 ? Color.rgb(190, 120, 25) : Color.rgb(190, 55, 55));
-        int msptColor = mspt <= 50.0 ? Color.rgb(35, 125, 70)
-                : (mspt <= 100.0 ? Color.rgb(190, 120, 25) : Color.rgb(190, 55, 55));
+        int tpsColor = tps >= 19.0 ? COLOR_GREEN
+                : (tps >= 15.0 ? COLOR_AMBER : COLOR_RED);
+        int msptColor = mspt <= 50.0 ? COLOR_GREEN
+                : (mspt <= 100.0 ? COLOR_AMBER : COLOR_RED);
 
         LinearLayout headline = new LinearLayout(this);
         headline.setOrientation(LinearLayout.HORIZONTAL);
@@ -646,22 +731,22 @@ public final class MainActivity extends Activity {
         headline.addView(metricTile("MSPT", formatNumber(mspt, 1) + " ms", "objetivo < 50 ms", msptColor),
                 metricTileParams(false));
         headline.addView(metricTile("JUGADORES", onlinePlayers + "/" + maxPlayers, "conectados",
-                        Color.rgb(38, 101, 165)), metricTileParams(false));
+                        COLOR_CYAN), metricTileParams(false));
         statsContainer.addView(headline, marginParams(dp(12)));
 
         double processCpu = json.optDouble("processCpuPercent", -1.0);
         double systemCpu = json.optDouble("systemCpuPercent", -1.0);
         addProgressMetric(statsContainer, "CPU de Minecraft", processCpu, formatPercent(processCpu),
-                Color.rgb(38, 101, 165));
+                COLOR_CYAN);
         addProgressMetric(statsContainer, "CPU del equipo", systemCpu, formatPercent(systemCpu),
-                Color.rgb(78, 117, 173));
+                COLOR_BLUE);
 
         long usedBytes = json.optLong("memoryUsedBytes", 0L);
         long maxBytes = json.optLong("memoryMaxBytes", 0L);
         double memoryPercent = maxBytes > 0L ? (usedBytes * 100.0 / maxBytes) : -1.0;
         addProgressMetric(statsContainer, "Memoria asignada", memoryPercent,
                 formatMegabytes(usedBytes) + " / " + formatMegabytes(maxBytes),
-                Color.rgb(43, 145, 95));
+                COLOR_GREEN);
 
         LinearLayout details = new LinearLayout(this);
         details.setOrientation(LinearLayout.HORIZONTAL);
@@ -673,7 +758,7 @@ public final class MainActivity extends Activity {
         statsContainer.addView(details, marginParams(dp(16)));
 
         TextView playersTitle = label("JUGADORES CONECTADOS");
-        playersTitle.setTextColor(Color.rgb(38, 101, 165));
+        playersTitle.setTextColor(COLOR_CYAN);
         playersTitle.setTextSize(12);
         statsContainer.addView(playersTitle, marginParams(dp(8)));
         LinearLayout players = new LinearLayout(this);
@@ -682,7 +767,7 @@ public final class MainActivity extends Activity {
         if (playerArray == null || playerArray.length() == 0) {
             TextView none = new TextView(this);
             none.setText("Ningún jugador conectado");
-            none.setTextColor(Color.rgb(105, 115, 125));
+            none.setTextColor(COLOR_MUTED);
             none.setTextSize(13);
             players.addView(none, matchWidthWrapHeight());
         } else {
@@ -691,11 +776,11 @@ public final class MainActivity extends Activity {
                 if (player == null) continue;
                 TextView playerChip = new TextView(this);
                 playerChip.setText("•  " + player.optString("name", "sin nombre"));
-                playerChip.setTextColor(Color.rgb(45, 75, 105));
+                playerChip.setTextColor(COLOR_GREEN);
                 playerChip.setTextSize(13);
                 playerChip.setPadding(dp(10), dp(6), dp(10), dp(6));
-                playerChip.setBackground(roundBackground(Color.rgb(239, 246, 253),
-                        Color.rgb(214, 229, 244), 10));
+                playerChip.setBackground(roundBackground(COLOR_SURFACE_RAISED,
+                        COLOR_BORDER, 8));
                 players.addView(playerChip, marginParams(dp(5)));
             }
         }
@@ -706,11 +791,11 @@ public final class MainActivity extends Activity {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setPadding(dp(11), dp(10), dp(11), dp(10));
-        tile.setBackground(roundBackground(Color.rgb(247, 250, 253), Color.rgb(226, 234, 242), 12));
+        tile.setBackground(roundBackground(COLOR_SURFACE_RAISED, COLOR_BORDER, 10));
 
         TextView titleView = new TextView(this);
         titleView.setText(title);
-        titleView.setTextColor(Color.rgb(105, 115, 125));
+        titleView.setTextColor(COLOR_MUTED);
         titleView.setTextSize(10);
         titleView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         tile.addView(titleView, matchWidthWrapHeight());
@@ -724,7 +809,7 @@ public final class MainActivity extends Activity {
 
         TextView captionView = new TextView(this);
         captionView.setText(caption);
-        captionView.setTextColor(Color.rgb(105, 115, 125));
+        captionView.setTextColor(COLOR_MUTED);
         captionView.setTextSize(11);
         tile.addView(captionView, matchWidthWrapHeight());
         return tile;
@@ -744,7 +829,7 @@ public final class MainActivity extends Activity {
 
         TextView titleView = new TextView(this);
         titleView.setText(title);
-        titleView.setTextColor(Color.rgb(55, 65, 75));
+        titleView.setTextColor(COLOR_TEXT);
         titleView.setTextSize(13);
         heading.addView(titleView, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -782,7 +867,7 @@ public final class MainActivity extends Activity {
             fraction = Double.isFinite(value)
                     ? (float) (Math.max(0.0, Math.min(100.0, value)) / 100.0)
                     : 0.0f;
-            trackPaint.setColor(Color.rgb(232, 238, 244));
+            trackPaint.setColor(COLOR_TRACK);
             fillPaint.setColor(color);
             setMinimumHeight(0);
             setMinimumWidth(0);
@@ -813,12 +898,12 @@ public final class MainActivity extends Activity {
         cell.setOrientation(LinearLayout.VERTICAL);
         TextView titleView = new TextView(this);
         titleView.setText(title);
-        titleView.setTextColor(Color.rgb(105, 115, 125));
+        titleView.setTextColor(COLOR_MUTED);
         titleView.setTextSize(10);
         cell.addView(titleView, matchWidthWrapHeight());
         TextView valueView = new TextView(this);
         valueView.setText(value);
-        valueView.setTextColor(Color.rgb(45, 55, 65));
+        valueView.setTextColor(COLOR_TEXT);
         valueView.setTextSize(12);
         valueView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         cell.addView(valueView, marginParams(dp(2)));
@@ -1054,12 +1139,12 @@ public final class MainActivity extends Activity {
                     updateDownloadEndpoint = downloadEndpoint;
                     if (remoteVersionCode > CURRENT_VERSION_CODE) {
                         updateView.setText("Nueva versión disponible: " + remoteVersionName);
-                        updateView.setTextColor(Color.rgb(35, 105, 165));
+                        updateView.setTextColor(COLOR_CYAN);
                         updateButton.setVisibility(View.VISIBLE);
                         updateButton.setEnabled(true);
                     } else {
                         updateView.setText("La aplicación está actualizada (" + CURRENT_VERSION_NAME + ").");
-                        updateView.setTextColor(Color.rgb(35, 125, 70));
+                        updateView.setTextColor(COLOR_GREEN);
                         updateButton.setVisibility(View.GONE);
                     }
                 });
@@ -1073,7 +1158,7 @@ public final class MainActivity extends Activity {
                     searchUpdateButton.setEnabled(true);
                     updateButton.setVisibility(View.GONE);
                     updateView.setText(message);
-                    updateView.setTextColor(Color.rgb(90, 100, 110));
+                    updateView.setTextColor(COLOR_MUTED);
                 });
             } finally {
                 if (connection != null) connection.disconnect();
@@ -1111,7 +1196,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     updateButton.setEnabled(true);
                     updateView.setText("No se pudo descargar la actualización.");
-                    updateView.setTextColor(Color.rgb(180, 45, 45));
+                    updateView.setTextColor(COLOR_RED);
                 });
             } finally {
                 if (connection != null) connection.disconnect();
@@ -1123,7 +1208,7 @@ public final class MainActivity extends Activity {
         if (apk == null || !apk.isFile() || apk.length() == 0L) {
             updateButton.setEnabled(true);
             updateView.setText("La actualización descargada está vacía.");
-            updateView.setTextColor(Color.rgb(180, 45, 45));
+            updateView.setTextColor(COLOR_RED);
             return;
         }
 
@@ -1135,10 +1220,10 @@ public final class MainActivity extends Activity {
                         Uri.parse("package:" + getPackageName()));
                 startActivity(settingsIntent);
                 updateView.setText("Activa «permitir instalar apps» y vuelve a pulsar instalar.");
-                updateView.setTextColor(Color.rgb(180, 110, 25));
+                updateView.setTextColor(COLOR_AMBER);
             } catch (ActivityNotFoundException error) {
                 updateView.setText("Activa manualmente el permiso para instalar apps desconocidas.");
-                updateView.setTextColor(Color.rgb(180, 45, 45));
+                updateView.setTextColor(COLOR_RED);
             }
             updateButton.setEnabled(true);
             return;
@@ -1162,11 +1247,11 @@ public final class MainActivity extends Activity {
                 startActivity(viewIntent);
             }
             updateView.setText("Descarga completa. Confirma la instalación de Android.");
-            updateView.setTextColor(Color.rgb(35, 105, 165));
+            updateView.setTextColor(COLOR_CYAN);
         } catch (RuntimeException error) {
             updateButton.setEnabled(true);
             updateView.setText("Android no pudo abrir el instalador. Revisa el permiso de instalación.");
-            updateView.setTextColor(Color.rgb(180, 45, 45));
+            updateView.setTextColor(COLOR_RED);
         }
     }
 
@@ -1227,7 +1312,7 @@ public final class MainActivity extends Activity {
 
     private void showError(String message) {
         statusView.setText(message);
-        statusView.setTextColor(Color.rgb(180, 45, 45));
+        statusView.setTextColor(COLOR_RED);
     }
 
     private LinearLayout.LayoutParams matchWidthWrapHeight() {

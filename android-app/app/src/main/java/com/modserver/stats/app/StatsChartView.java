@@ -22,6 +22,12 @@ final class StatsChartView extends View {
     static final int METRIC_PLAYERS = 5;
     static final int METRIC_LATENCY = 6;
 
+    private static final int COLOR_SURFACE_RAISED = Color.rgb(13, 27, 33);
+    private static final int COLOR_GRID = Color.rgb(24, 69, 77);
+    private static final int COLOR_TEXT = Color.rgb(224, 255, 246);
+    private static final int COLOR_MUTED = Color.rgb(126, 165, 158);
+    private static final int COLOR_CYAN = Color.rgb(0, 238, 214);
+
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final ArrayList<StatsSample> samples = new ArrayList<>();
     private int metric = METRIC_TPS;
@@ -29,7 +35,7 @@ final class StatsChartView extends View {
     StatsChartView(Context context) {
         super(context);
         setMinimumHeight(dp(230));
-        setBackgroundColor(Color.WHITE);
+        setBackgroundColor(COLOR_SURFACE_RAISED);
     }
 
     void setMetric(int metric) {
@@ -51,15 +57,17 @@ final class StatsChartView extends View {
         float right = getWidth() - dp(16);
         float bottom = getHeight() - dp(30);
 
-        paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+        paint.setFakeBoldText(true);
         paint.setTextSize(dp(14));
-        paint.setColor(Color.rgb(35, 45, 55));
+        paint.setColor(COLOR_TEXT);
         canvas.drawText(metricLabel(metric), dp(16), dp(23), paint);
 
         if (samples.isEmpty()) {
-            paint.setTypeface(android.graphics.Typeface.DEFAULT);
+            paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+            paint.setFakeBoldText(false);
             paint.setTextSize(dp(14));
-            paint.setColor(Color.rgb(105, 115, 125));
+            paint.setColor(COLOR_MUTED);
             canvas.drawText("Activa la actualizaci\u00f3n autom\u00e1tica o pulsa Actualizar.", dp(16), getHeight() / 2f, paint);
             return;
         }
@@ -107,15 +115,16 @@ final class StatsChartView extends View {
     private void drawGrid(Canvas canvas, float left, float top, float right, float bottom, Scale scale) {
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1f);
-        paint.setColor(Color.rgb(225, 230, 235));
+        paint.setColor(COLOR_GRID);
         for (int index = 0; index <= 4; index++) {
             float y = top + (bottom - top) * index / 4f;
             canvas.drawLine(left, y, right, y, paint);
         }
         paint.setStyle(Paint.Style.FILL);
-        paint.setTypeface(android.graphics.Typeface.DEFAULT);
+        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+        paint.setFakeBoldText(false);
         paint.setTextSize(dp(11));
-        paint.setColor(Color.rgb(105, 115, 125));
+        paint.setColor(COLOR_MUTED);
         canvas.drawText(formatValue(scale.max), dp(4), top + dp(4), paint);
         canvas.drawText(formatValue(scale.min), dp(4), bottom, paint);
     }
@@ -154,16 +163,18 @@ final class StatsChartView extends View {
 
     private void drawLabels(Canvas canvas, float left, float top, float right, float bottom, Scale scale) {
         StatsSample latest = samples.get(samples.size() - 1);
-        paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+        paint.setFakeBoldText(true);
         paint.setTextSize(dp(14));
         paint.setColor(colorFor(metric));
         String latestLabel = isValid(scale.latest) ? formatValue(scale.latest) : "sin datos";
         float labelWidth = paint.measureText(latestLabel);
         canvas.drawText(latestLabel, right - labelWidth, dp(23), paint);
 
-        paint.setTypeface(android.graphics.Typeface.DEFAULT);
+        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+        paint.setFakeBoldText(false);
         paint.setTextSize(dp(11));
-        paint.setColor(Color.rgb(105, 115, 125));
+        paint.setColor(COLOR_MUTED);
         String start = formatTime(samples.get(0).capturedAtMs);
         String end = formatTime(latest.capturedAtMs);
         canvas.drawText(start, left, bottom + dp(19), paint);
@@ -207,14 +218,14 @@ final class StatsChartView extends View {
 
     private static int colorFor(int selectedMetric) {
         return switch (selectedMetric) {
-            case METRIC_TPS -> Color.rgb(35, 125, 70);
-            case METRIC_MSPT -> Color.rgb(52, 105, 180);
-            case METRIC_PROCESS_CPU -> Color.rgb(204, 105, 36);
-            case METRIC_SYSTEM_CPU -> Color.rgb(161, 66, 161);
-            case METRIC_MEMORY -> Color.rgb(178, 56, 56);
-            case METRIC_PLAYERS -> Color.rgb(35, 135, 150);
-            case METRIC_LATENCY -> Color.rgb(120, 90, 60);
-            default -> Color.DKGRAY;
+            case METRIC_TPS -> Color.rgb(0, 255, 145);
+            case METRIC_MSPT -> COLOR_CYAN;
+            case METRIC_PROCESS_CPU -> Color.rgb(255, 183, 0);
+            case METRIC_SYSTEM_CPU -> Color.rgb(255, 45, 190);
+            case METRIC_MEMORY -> Color.rgb(255, 75, 105);
+            case METRIC_PLAYERS -> Color.rgb(90, 170, 255);
+            case METRIC_LATENCY -> Color.rgb(190, 135, 255);
+            default -> COLOR_TEXT;
         };
     }
 
