@@ -20,6 +20,7 @@ import org.apache.logging.log4j.core.config.LoggerConfig;
 /** Captures a bounded, in-memory view of the server log for the optional Android console. */
 public final class ConsoleLogBuffer extends AbstractAppender {
     private static final String APPENDER_NAME = "ModServerStatsConsoleBuffer";
+    private static final String SQLITE_LOGGER_NAME = "org.sqlite.core.NativeDB";
     private static final int MAX_LINES = 500;
     private static final int MAX_LINE_LENGTH = 2048;
     private static final SimpleDateFormat TIME_FORMAT =
@@ -38,6 +39,27 @@ public final class ConsoleLogBuffer extends AbstractAppender {
         this.rootLoggerConfig = rootLoggerConfig;
     }
 
+    /**
+     * SQLite's bundled driver logs every SQL statement at TRACE when the server
+     * logging level is verbose. Keep warnings and errors, but hide the internal
+     * statement trace from both the server console and the Android console.
+     */
+    public static void silenceSqliteTrace() {
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        LoggerConfig configuration = context.getConfiguration().getLoggerConfig(SQLITE_LOGGER_NAME);
+        if (!SQLITE_LOGGER_NAME.equals(configuration.getName())) {
+            context.getConfiguration().addLogger(
+                    SQLITE_LOGGER_NAME, new LoggerConfig(SQLITE_LOGGER_NAME, Level.WARN, true));
+        } else {
+            configuration.setLevel(Level.WARN);
+        }
+        context.updateLoggers();
+
+        // The driver falls back to java.util.logging when SLF4J is not present.
+        java.util.logging.Logger.getLogger(SQLITE_LOGGER_NAME)
+                .setLevel(java.util.logging.Level.WARNING);
+    }
+
     public static ConsoleLogBuffer install() {
         LoggerContext context = (LoggerContext) LogManager.getContext(false);
         LoggerConfig root = context.getConfiguration().getRootLogger();
@@ -51,6 +73,7 @@ public final class ConsoleLogBuffer extends AbstractAppender {
     @Override
     public void append(LogEvent event) {
         if (closed || event == null) return;
+        if (isSqliteTrace(event)) return;
 
         String time;
         synchronized (TIME_FORMAT) {
@@ -67,6 +90,15 @@ public final class ConsoleLogBuffer extends AbstractAppender {
             event.getThrown().printStackTrace(new PrintWriter(stack));
             appendText(stack.toString());
         }
+    }
+
+    private static boolean isSqliteTrace(LogEvent event) {
+        if (event.getLevel() != Level.TRACE) return false;
+        String loggerName = event.getLoggerName();
+        if (loggerName != null && loggerName.startsWith("org.sqlite")) return true;
+        String message = event.getMessage() == null
+                ? "" : event.getMessage().getFormattedMessage();
+        return message != null && message.contains("[SQLite ");
     }
 
     public Snapshot readAfter(long afterSequence, int requestedLimit) {

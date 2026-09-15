@@ -28,7 +28,9 @@ public final class ServerStatsService {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        if (ServerStatsConfig.HISTORY_ENABLED.getAsBoolean()) {
+        boolean historyEnabled = ServerStatsConfig.HISTORY_ENABLED.getAsBoolean();
+        if (historyEnabled) {
+            ConsoleLogBuffer.silenceSqliteTrace();
             try {
                 historyStore = new HistoryStore(
                         FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("history"),

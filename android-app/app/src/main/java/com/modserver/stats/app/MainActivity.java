@@ -62,8 +62,8 @@ public final class MainActivity extends Activity {
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
     private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
-    private static final int CURRENT_VERSION_CODE = 18;
-    private static final String CURRENT_VERSION_NAME = "1.17";
+    private static final int CURRENT_VERSION_CODE = 19;
+    private static final String CURRENT_VERSION_NAME = "1.18";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -100,7 +100,7 @@ public final class MainActivity extends Activity {
     private EditText commandInput;
     private Button commandSendButton;
     private TextView commandOutputView;
-    private ScrollView consoleScrollView;
+    private ScrollView consoleOutputScrollView;
     private Switch autoRefreshSwitch;
     private Spinner intervalSpinner;
     private ExecutorService executor;
@@ -324,7 +324,6 @@ public final class MainActivity extends Activity {
 
     private View createConsoleScreen() {
         ScrollView scroll = screenScroll();
-        consoleScrollView = scroll;
         LinearLayout content = screenContent(scroll);
 
         TextView heading = label("REMOTE CONSOLE // OPERATOR");
@@ -341,6 +340,12 @@ public final class MainActivity extends Activity {
         TextView outputTitle = label("SERVER OUTPUT // LIVE");
         outputTitle.setTextColor(COLOR_GREEN);
         outputCard.addView(outputTitle, matchWidthWrapHeight());
+
+        consoleOutputScrollView = new ScrollView(this);
+        consoleOutputScrollView.setFillViewport(true);
+        consoleOutputScrollView.setVerticalScrollBarEnabled(true);
+        consoleOutputScrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        consoleOutputScrollView.setBackground(roundBackground(Color.BLACK, COLOR_BORDER, 8));
         commandOutputView = new TextView(this);
         commandOutputView.setTextColor(COLOR_GREEN);
         commandOutputView.setTextSize(13);
@@ -349,8 +354,13 @@ public final class MainActivity extends Activity {
         commandOutputView.setTextIsSelectable(true);
         commandOutputView.setMinHeight(dp(190));
         commandOutputView.setPadding(dp(12), dp(12), dp(12), dp(12));
-        commandOutputView.setBackground(roundBackground(Color.BLACK, COLOR_BORDER, 8));
-        outputCard.addView(commandOutputView, marginParams(dp(2)));
+        commandOutputView.setBackgroundColor(Color.TRANSPARENT);
+        consoleOutputScrollView.addView(commandOutputView, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams outputScrollParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(220));
+        outputScrollParams.bottomMargin = dp(2);
+        outputCard.addView(consoleOutputScrollView, outputScrollParams);
         content.addView(outputCard, cardParams(dp(12)));
         appendConsoleLine("[ready] consola conectada al nodo local");
 
@@ -905,8 +915,8 @@ public final class MainActivity extends Activity {
             consoleTranscript.delete(0, consoleTranscript.length() - 12000);
         }
         commandOutputView.setText(consoleTranscript.toString());
-        if (consoleScrollView != null) {
-            consoleScrollView.post(() -> consoleScrollView.fullScroll(View.FOCUS_DOWN));
+        if (consoleOutputScrollView != null) {
+            consoleOutputScrollView.post(() -> consoleOutputScrollView.fullScroll(View.FOCUS_DOWN));
         }
     }
 

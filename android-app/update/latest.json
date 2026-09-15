@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "1.17",
-  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app-v1.17.apk",
-  "releaseNotes": "Consola CLI con salida del servidor en tiempo real"
+  "versionCode": 19,
+  "versionName": "1.18",
+  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app-v1.18.apk",
+  "releaseNotes": "Consola encapsulada con desplazamiento interno y filtro de trazas SQLite"
 }
