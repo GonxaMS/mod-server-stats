@@ -105,7 +105,7 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Verify Android APK signature
-        run: apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
