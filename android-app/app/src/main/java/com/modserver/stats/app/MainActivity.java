@@ -60,8 +60,9 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 14;
-    private static final String CURRENT_VERSION_NAME = "1.13";
+    private static final int CURRENT_VERSION_CODE = 15;
+    private static final String CURRENT_VERSION_NAME = "1.14";
+    private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
 
@@ -110,6 +111,7 @@ public final class MainActivity extends Activity {
     private String updateDownloadEndpoint;
     private int availableVersionCode;
     private String availableVersionName;
+    private File pendingUpdateApk;
     private final ArrayList<StatsSample> history = new ArrayList<>();
 
     @Override
@@ -1214,18 +1216,20 @@ public final class MainActivity extends Activity {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !getPackageManager().canRequestPackageInstalls()) {
+            pendingUpdateApk = apk;
             try {
                 Intent settingsIntent = new Intent(
                         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + getPackageName()));
-                startActivity(settingsIntent);
-                updateView.setText("Activa «permitir instalar apps» y vuelve a pulsar instalar.");
+                startActivityForResult(settingsIntent, INSTALL_PERMISSION_REQUEST_CODE);
+                updateView.setText("Activa «permitir instalar apps». Al volver, la instalación continuará sola.");
                 updateView.setTextColor(COLOR_AMBER);
             } catch (ActivityNotFoundException error) {
+                pendingUpdateApk = null;
                 updateView.setText("Activa manualmente el permiso para instalar apps desconocidas.");
                 updateView.setTextColor(COLOR_RED);
+                updateButton.setEnabled(true);
             }
-            updateButton.setEnabled(true);
             return;
         }
 
@@ -1252,6 +1256,24 @@ public final class MainActivity extends Activity {
             updateButton.setEnabled(true);
             updateView.setText("Android no pudo abrir el instalador. Revisa el permiso de instalación.");
             updateView.setTextColor(COLOR_RED);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != INSTALL_PERMISSION_REQUEST_CODE) return;
+
+        File apk = pendingUpdateApk;
+        pendingUpdateApk = null;
+        if (apk != null
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && getPackageManager().canRequestPackageInstalls()) {
+            installDownloadedUpdate(apk);
+        } else {
+            updateButton.setEnabled(true);
+            updateView.setText("El permiso de instalación sigue desactivado.");
+            updateView.setTextColor(COLOR_AMBER);
         }
     }
 

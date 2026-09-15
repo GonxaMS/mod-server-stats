@@ -2,6 +2,19 @@ plugins {
     id 'com.android.application'
 }
 
+def appVersionCode = 15
+def appVersionName = '1.14'
+def stableSigningStoreFile = System.getenv('ANDROID_SIGNING_STORE_FILE')
+def stableSigningStorePassword = System.getenv('ANDROID_SIGNING_STORE_PASSWORD')
+def stableSigningKeyAlias = System.getenv('ANDROID_SIGNING_KEY_ALIAS')
+def stableSigningKeyPassword = System.getenv('ANDROID_SIGNING_KEY_PASSWORD')
+def hasStableSigning = [
+        stableSigningStoreFile,
+        stableSigningStorePassword,
+        stableSigningKeyAlias,
+        stableSigningKeyPassword
+].every { value -> value != null && !value.trim().isEmpty() }
+
 android {
     namespace 'com.modserver.stats.app'
     compileSdk 35
@@ -10,12 +23,32 @@ android {
         applicationId 'com.modserver.stats.app'
         minSdk 23
         targetSdk 35
-        versionCode 14
-        versionName '1.13'
+        versionCode appVersionCode
+        versionName appVersionName
+        resValue 'string', 'app_name', "Mod Server Stats ${appVersionName}"
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    signingConfigs {
+        if (hasStableSigning) {
+            stable {
+                storeFile file(stableSigningStoreFile)
+                storePassword stableSigningStorePassword
+                keyAlias stableSigningKeyAlias
+                keyPassword stableSigningKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (hasStableSigning) {
+                signingConfig signingConfigs.stable
+            }
+        }
     }
 }
