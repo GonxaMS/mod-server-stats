@@ -70,8 +70,8 @@ public final class MainActivity extends Activity {
     private static final int MAX_CONSOLE_CHARS = 32000;
     private static final int MIN_API_TOKEN_LENGTH = 32;
     private static final int MIN_API_PASSWORD_LENGTH = 12;
-    private static final int CURRENT_VERSION_CODE = 27;
-    private static final String CURRENT_VERSION_NAME = "1.26";
+    private static final int CURRENT_VERSION_CODE = 28;
+    private static final String CURRENT_VERSION_NAME = "1.27";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -351,12 +351,6 @@ public final class MainActivity extends Activity {
         // the live log does not look like a box inside another box.
         consoleOutputScrollView.setBackgroundColor(Color.BLACK);
         consoleOutputScrollView.setPadding(dp(6), dp(6), dp(6), dp(6));
-        consoleOutputScrollView.setOnScrollChangeListener(
-                (view, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-                    if (!consoleScrollProgrammatic && view.getHeight() > 0) {
-                        consoleFollowTail = isConsoleOutputAtBottom();
-                    }
-                });
         commandOutputView = new TextView(this);
         commandOutputView.setTextColor(COLOR_GREEN);
         commandOutputView.setTextSize(12);
@@ -1002,7 +996,7 @@ public final class MainActivity extends Activity {
         }
         commandOutputView.setText(consoleTranscript.toString());
         if (consoleOutputScrollView != null) {
-            consoleOutputScrollView.post(() -> {
+            consoleOutputScrollView.postOnAnimation(() -> {
                 consoleScrollProgrammatic = true;
                 try {
                     if (followTail) {
@@ -1393,6 +1387,8 @@ public final class MainActivity extends Activity {
 
     /** Keeps the live output scrollable without letting the outer screen consume the gesture. */
     private final class ConsoleOutputScrollView extends ScrollView {
+        private boolean userTouchActive;
+
         ConsoleOutputScrollView(Context context) {
             super(context);
         }
@@ -1402,12 +1398,34 @@ public final class MainActivity extends Activity {
             ViewParent parent = getParent();
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN && parent != null) {
+                userTouchActive = true;
                 parent.requestDisallowInterceptTouchEvent(true);
             } else if ((action == MotionEvent.ACTION_UP
                     || action == MotionEvent.ACTION_CANCEL) && parent != null) {
                 parent.requestDisallowInterceptTouchEvent(false);
             }
-            return super.dispatchTouchEvent(event);
+            boolean handled = super.dispatchTouchEvent(event);
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                // Let the final scroll position settle before deciding whether
+                // the user is still following the end of the log.
+                post(() -> {
+                    if (!consoleScrollProgrammatic) {
+                        consoleFollowTail = isConsoleOutputAtBottom();
+                    }
+                });
+                userTouchActive = false;
+            }
+            return handled;
+        }
+
+        @Override
+        protected void onScrollChanged(int left, int top, int oldLeft, int oldTop) {
+            super.onScrollChanged(left, top, oldLeft, oldTop);
+            // Ignore scroll changes caused by setText/layout. Only a real
+            // touch gesture is allowed to disable follow-tail mode.
+            if (userTouchActive && !consoleScrollProgrammatic) {
+                consoleFollowTail = isConsoleOutputAtBottom();
+            }
         }
     }
 
