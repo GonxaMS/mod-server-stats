@@ -39,8 +39,9 @@ public final class ServerStatsService {
         if (!ServerStatsConfig.API_ENABLED.getAsBoolean()) return;
         try {
             EmbeddedStatsApiServer api = new EmbeddedStatsApiServer(
-                    latestSnapshot, historyStore,
-                    FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("updates"));
+                    event.getServer(), latestSnapshot, historyStore,
+                    FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("updates"),
+                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean());
             api.start(ServerStatsConfig.API_BIND_ADDRESS.get(), ServerStatsConfig.API_PORT.getAsInt());
             embeddedApi = api;
         } catch (IOException | RuntimeException error) {

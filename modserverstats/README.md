@@ -12,6 +12,7 @@ El mod expone el estado del servidor directamente desde Minecraft. Edita
 enabled = true
 port = 8080
 bindAddress = "0.0.0.0"
+consoleEnabled = false
 ```
 
 La aplicación Android puede leer el JSON con una petición `GET` a:
@@ -22,6 +23,17 @@ http://SERVER_ADDRESS:PORT/api/server/stats
 
 El puerto de Minecraft (`25565`) y el puerto de la API deben ser diferentes.
 La API está desactivada por defecto.
+
+## Consola CLI (opcional)
+
+Para habilitar la pestaña CLI de la aplicación, cambia `consoleEnabled` a
+`true` dentro de `[api]`. La aplicación podrá enviar comandos como `list`,
+`say mensaje` u `op jugador` y mostrará la respuesta generada por el servidor
+en cada ejecución. La consola remota no tiene autenticación; mantenla
+desactivada salvo durante tus pruebas y no expongas ese puerto a Internet.
+
+Esta función muestra la salida del comando ejecutado. No transmite todos los
+logs en vivo de la consola de Minecraft.
 
 La respuesta incluye `processCpuPercent` para la JVM de Minecraft y
 `systemCpuPercent` para el equipo. Cualquiera puede ser `null` si Java no

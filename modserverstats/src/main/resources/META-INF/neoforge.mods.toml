@@ -46,7 +46,7 @@ displayName="${mod_name}" #mandatory
 
 # The description text for the mod (multi line!) (#mandatory)
 description='''
-Server telemetry for NeoForge 1.21.1. Sends configurable server and player statistics to an HTTP endpoint without blocking the server tick thread.
+Server telemetry for NeoForge 1.21.1. Sends configurable server statistics to an HTTP endpoint and can expose an opt-in remote command console for controlled testing.
 '''
 
 # The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.

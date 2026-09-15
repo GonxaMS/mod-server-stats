@@ -16,6 +16,8 @@ Aplicación Android sencilla para consultar directamente la API incluida en el m
 2. Abre la aplicación, escribe la IP o dominio del servidor y el mismo puerto.
 3. Pulsa **Actualizar**. Si quieres vigilarlo, activa la actualización automática y elige 5, 10, 30 o 60 segundos.
 
+En la pestaña **CLI** puedes enviar comandos y ver la respuesta que genera el servidor. Para activarla, añade `consoleEnabled = true` dentro de `[api]` en la configuración del mod. La opción está desactivada por defecto.
+
 La aplicación consulta `http://DIRECCION:PUERTO/api/server/stats`. El botón de puerto permite usar el puerto que te haya asignado el proveedor del servidor.
 
 Además de jugadores, TPS, MSPT, memoria y uptime, muestra el uso de CPU del proceso de Minecraft y la carga total del sistema cuando la JVM proporciona esas métricas.

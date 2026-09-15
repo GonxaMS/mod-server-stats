@@ -49,6 +49,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -60,8 +61,8 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final int CURRENT_VERSION_CODE = 16;
-    private static final String CURRENT_VERSION_NAME = "1.15";
+    private static final int CURRENT_VERSION_CODE = 17;
+    private static final String CURRENT_VERSION_NAME = "1.16";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -95,6 +96,9 @@ public final class MainActivity extends Activity {
     private TextView updateView;
     private Button searchUpdateButton;
     private Button updateButton;
+    private EditText commandInput;
+    private Button commandSendButton;
+    private TextView commandOutputView;
     private Switch autoRefreshSwitch;
     private Spinner intervalSpinner;
     private ExecutorService executor;
@@ -113,6 +117,8 @@ public final class MainActivity extends Activity {
     private String availableVersionName;
     private File pendingUpdateApk;
     private final ArrayList<StatsSample> history = new ArrayList<>();
+    private final StringBuilder consoleTranscript = new StringBuilder();
+    private boolean commandInProgress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -157,18 +163,22 @@ public final class MainActivity extends Activity {
         navigation.setElevation(0);
         TextView statusTab = navigationButton("Estado");
         TextView historyTab = navigationButton("Historial");
+        TextView consoleTab = navigationButton("CLI");
         TextView settingsTab = navigationButton("Ajustes");
         navigation.addView(statusTab, weightedWidth());
         navigation.addView(historyTab, weightedWidth());
+        navigation.addView(consoleTab, weightedWidth());
         navigation.addView(settingsTab, weightedWidth());
         root.addView(navigation, matchWidthWrapHeight());
 
         FrameLayout screens = new FrameLayout(this);
         View statusScreen = createStatusScreen();
         View historyScreen = createHistoryScreen();
+        View consoleScreen = createConsoleScreen();
         View settingsScreen = createSettingsScreen();
         screens.addView(statusScreen, frameMatchParams());
         screens.addView(historyScreen, frameMatchParams());
+        screens.addView(consoleScreen, frameMatchParams());
         screens.addView(settingsScreen, frameMatchParams());
         root.addView(screens, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -190,10 +200,11 @@ public final class MainActivity extends Activity {
         });
         root.post(root::requestApplyInsets);
 
-        View[] allScreens = {statusScreen, historyScreen, settingsScreen};
-        TextView[] allTabs = {statusTab, historyTab, settingsTab};
+        View[] allScreens = {statusScreen, historyScreen, consoleScreen, settingsScreen};
+        TextView[] allTabs = {statusTab, historyTab, consoleTab, settingsTab};
         statusTab.setOnClickListener(view -> showScreen(statusScreen, statusTab, allScreens, allTabs));
         historyTab.setOnClickListener(view -> showScreen(historyScreen, historyTab, allScreens, allTabs));
+        consoleTab.setOnClickListener(view -> showScreen(consoleScreen, consoleTab, allScreens, allTabs));
         settingsTab.setOnClickListener(view -> showScreen(settingsScreen, settingsTab, allScreens, allTabs));
         showScreen(statusScreen, statusTab, allScreens, allTabs);
         applyTerminalTypeface(root);
@@ -283,6 +294,57 @@ public final class MainActivity extends Activity {
                 // Keep the previously selected chart.
             }
         });
+        return scroll;
+    }
+
+    private View createConsoleScreen() {
+        ScrollView scroll = screenScroll();
+        LinearLayout content = screenContent(scroll);
+
+        TextView heading = label("REMOTE CONSOLE // OPERATOR");
+        heading.setTextSize(20);
+        content.addView(heading, matchWidthWrapHeight());
+
+        TextView help = new TextView(this);
+        help.setText("Ejecuta comandos del servidor y recibe su salida aqui.");
+        help.setTextColor(COLOR_MUTED);
+        help.setTextSize(13);
+        content.addView(help, marginParams(dp(10)));
+
+        LinearLayout outputCard = card();
+        TextView outputTitle = label("SERVER OUTPUT");
+        outputTitle.setTextColor(COLOR_GREEN);
+        outputCard.addView(outputTitle, matchWidthWrapHeight());
+        commandOutputView = new TextView(this);
+        commandOutputView.setTextColor(COLOR_GREEN);
+        commandOutputView.setTextSize(13);
+        commandOutputView.setTypeface(Typeface.MONOSPACE);
+        commandOutputView.setGravity(Gravity.TOP | Gravity.START);
+        commandOutputView.setTextIsSelectable(true);
+        commandOutputView.setMinHeight(dp(190));
+        commandOutputView.setPadding(dp(12), dp(12), dp(12), dp(12));
+        commandOutputView.setBackground(roundBackground(Color.BLACK, COLOR_BORDER, 8));
+        outputCard.addView(commandOutputView, marginParams(dp(2)));
+        content.addView(outputCard, cardParams(dp(12)));
+        appendConsoleLine("[ready] consola conectada al nodo local");
+
+        commandInput = new EditText(this);
+        commandInput.setSingleLine(true);
+        commandInput.setHint("list / op jugador / say mensaje");
+        commandInput.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        styleInput(commandInput);
+        content.addView(commandInput, marginParams(dp(8)));
+
+        commandSendButton = actionButton("[ EJECUTAR COMANDO ]", COLOR_MAGENTA);
+        commandSendButton.setOnClickListener(view -> sendCommand());
+        content.addView(commandSendButton, marginParams(dp(12)));
+
+        TextView warning = new TextView(this);
+        warning.setText("Sin autenticacion: activa api.consoleEnabled solo en tu servidor de pruebas.");
+        warning.setTextColor(COLOR_AMBER);
+        warning.setTextSize(12);
+        content.addView(warning, matchWidthWrapHeight());
         return scroll;
     }
 
@@ -668,6 +730,10 @@ public final class MainActivity extends Activity {
     }
 
     private static String buildEndpoint(String address, int port) {
+        return buildEndpoint(address, port, "/api/server/stats");
+    }
+
+    private static String buildEndpoint(String address, int port, String apiPath) {
         String normalized = address;
         if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
             normalized = "http://" + normalized;
@@ -689,21 +755,128 @@ public final class MainActivity extends Activity {
             }
 
             int actualPort = parsed.getPort() == -1 ? port : parsed.getPort();
-            return protocol + "://" + host + ":" + actualPort + "/api/server/stats";
+            return protocol + "://" + host + ":" + actualPort + apiPath;
         } catch (IOException exception) {
             throw new IllegalArgumentException("La dirección del servidor no es válida.");
         }
     }
 
+    private void sendCommand() {
+        if (commandInProgress || commandInput == null) return;
+
+        String command = commandInput.getText().toString().trim();
+        if (command.startsWith("/")) command = command.substring(1).trim();
+        if (command.isEmpty()) {
+            appendConsoleLine("[error] escribe un comando primero");
+            return;
+        }
+        if (command.length() > 2048) {
+            appendConsoleLine("[error] el comando supera los 2048 caracteres");
+            return;
+        }
+
+        String address = addressInput.getText().toString().trim();
+        String portText = portInput.getText().toString().trim();
+        if (address.isEmpty()) {
+            appendConsoleLine("[error] configura la direccion del servidor en Ajustes");
+            return;
+        }
+
+        final int port;
+        try {
+            port = Integer.parseInt(portText);
+        } catch (NumberFormatException error) {
+            appendConsoleLine("[error] el puerto no es valido");
+            return;
+        }
+        if (port < 1 || port > 65535) {
+            appendConsoleLine("[error] el puerto debe estar entre 1 y 65535");
+            return;
+        }
+
+        final String endpoint;
+        try {
+            endpoint = buildEndpoint(address, port, "/api/server/command");
+        } catch (IllegalArgumentException error) {
+            appendConsoleLine("[error] " + error.getMessage());
+            return;
+        }
+
+        final String commandToSend = command;
+        preferences.edit().putString("address", address).putString("port", portText).apply();
+        commandInProgress = true;
+        commandSendButton.setEnabled(false);
+        appendConsoleLine("> " + commandToSend);
+
+        executor.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String commandUrl = endpoint + "?command=" + URLEncoder.encode(commandToSend, "UTF-8");
+                connection = (HttpURLConnection) new URL(commandUrl).openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(12000);
+                connection.setUseCaches(false);
+
+                int responseCode = connection.getResponseCode();
+                InputStream responseStream = responseCode >= 200 && responseCode < 300
+                        ? connection.getInputStream() : connection.getErrorStream();
+                String responseBody = responseStream == null ? "" : readResponse(responseStream);
+                if (responseCode < 200 || responseCode >= 300) {
+                    throw new IOException("HTTP " + responseCode);
+                }
+
+                String output = new JSONObject(responseBody).optString("output", "").trim();
+                runOnUiThread(() -> {
+                    commandInProgress = false;
+                    commandSendButton.setEnabled(true);
+                    appendConsoleLine(output.isEmpty() ? "[ok] comando ejecutado sin salida" : output);
+                    commandInput.requestFocus();
+                });
+            } catch (Exception error) {
+                String message = error.getMessage();
+                if (message == null || message.trim().isEmpty()) {
+                    message = error.getClass().getSimpleName();
+                }
+                final String errorMessage = message;
+                runOnUiThread(() -> {
+                    commandInProgress = false;
+                    commandSendButton.setEnabled(true);
+                    appendConsoleLine("[error] " + errorMessage);
+                });
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        });
+    }
+
     private static String readResponse(InputStream stream) throws IOException {
         StringBuilder response = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 response.append(line);
             }
         }
         return response.toString();
+    }
+
+    private void appendConsoleLine(String text) {
+        if (commandOutputView == null) return;
+        if (consoleTranscript.length() > 0
+                && consoleTranscript.charAt(consoleTranscript.length() - 1) != '\n') {
+            consoleTranscript.append('\n');
+        }
+        consoleTranscript.append(text == null ? "" : text);
+        if (consoleTranscript.length() == 0
+                || consoleTranscript.charAt(consoleTranscript.length() - 1) != '\n') {
+            consoleTranscript.append('\n');
+        }
+        if (consoleTranscript.length() > 12000) {
+            consoleTranscript.delete(0, consoleTranscript.length() - 12000);
+        }
+        commandOutputView.setText(consoleTranscript.toString());
     }
 
     private void renderEmptyStats() {
