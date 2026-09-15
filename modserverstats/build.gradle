@@ -26,46 +26,6 @@ sourceSets.main.resources {
     exclude("src/generated/**/.cache") // datagen cache files
 }
 
-// Bundle the current Android APK in the mod when it has already been built.
-// The server extracts it automatically to config/modserverstats/updates.
-def androidApkFile = rootProject.file('../android-app/app/build/outputs/apk/debug/app-debug.apk')
-def embeddedUpdateDirectory = layout.buildDirectory.dir('generated/embedded-app-update')
-tasks.register('prepareEmbeddedAppUpdate') {
-    inputs.file(androidApkFile).optional()
-    outputs.dir(embeddedUpdateDirectory)
-    doLast {
-        def outputDirectory = embeddedUpdateDirectory.get().asFile
-        project.delete(outputDirectory)
-        if (!androidApkFile.isFile()) return
-        outputDirectory.mkdirs()
-        copy {
-            from androidApkFile
-            into outputDirectory
-            rename { 'latest.apk' }
-        }
-        def androidBuildFile = rootProject.file('../android-app/app/build.gradle')
-        def androidBuildText = androidBuildFile.getText('UTF-8')
-        def codeMatch = androidBuildText =~ /versionCode\s+(\d+)/
-        def nameMatch = androidBuildText =~ /versionName\s+'([^']+)'/
-        def versionCode = codeMatch.find() ? codeMatch.group(1) : '0'
-        def versionName = nameMatch.find() ? nameMatch.group(1) : 'unknown'
-        new File(outputDirectory, 'latest.json').setText("""{
-  \"versionCode\": ${versionCode},
-  \"versionName\": \"${versionName}\",
-  \"downloadPath\": \"/api/app/update/download\",
-  \"releaseNotes\": \"Actualización de Mod Server Stats\"
-}
-""", 'UTF-8')
-    }
-}
-
-tasks.named('processResources').configure {
-    dependsOn 'prepareEmbeddedAppUpdate'
-    from(embeddedUpdateDirectory) {
-        into 'updates'
-    }
-}
-
 repositories {
     // Add here additional repositories if required by some of the dependencies below.
 }

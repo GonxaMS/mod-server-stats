@@ -13,8 +13,6 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URLDecoder;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
@@ -29,7 +27,6 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     private final MinecraftServer server;
     private final AtomicReference<ServerSnapshot> latestSnapshot;
     private final HistoryStore historyStore;
-    private final Path updateDirectory;
     private final boolean consoleEnabled;
     private final byte[] basicCredentialsBytes;
     private final byte[] authTokenBytes;
@@ -39,13 +36,12 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     private Thread acceptThread;
 
     public EmbeddedStatsApiServer(MinecraftServer server, AtomicReference<ServerSnapshot> latestSnapshot,
-                                  HistoryStore historyStore, Path updateDirectory, boolean consoleEnabled,
+                                  HistoryStore historyStore, boolean consoleEnabled,
                                   String username, String password, String authToken,
                                   ConsoleLogBuffer consoleLogBuffer) {
         this.server = server;
         this.latestSnapshot = latestSnapshot;
         this.historyStore = historyStore;
-        this.updateDirectory = updateDirectory;
         this.consoleEnabled = consoleEnabled;
         String normalizedUsername = username == null ? "" : username.trim();
         String normalizedPassword = password == null ? "" : password.trim();
@@ -63,7 +59,6 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
 
     public synchronized void start(String bindAddress, int port) throws IOException {
         if (serverSocket != null) return;
-        prepareUpdateFiles();
         InetAddress address = bindAddress == null || bindAddress.isBlank()
                 ? null : InetAddress.getByName(bindAddress);
         serverSocket = address == null
@@ -79,29 +74,6 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
         acceptThread.start();
         ModServerStats.LOGGER.info("Embedded Android API listening on {}:{}",
                 bindAddress == null || bindAddress.isBlank() ? "0.0.0.0" : bindAddress, port);
-    }
-
-    private void prepareUpdateFiles() {
-        try {
-            Files.createDirectories(updateDirectory);
-            String embeddedManifest;
-            try (var manifestStream = getClass().getResourceAsStream("/updates/latest.json")) {
-                if (manifestStream == null) return;
-                embeddedManifest = new String(manifestStream.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            if (getClass().getResource("/updates/latest.apk") == null) return;
-            Path manifest = updateDirectory.resolve("latest.json");
-            boolean changed = !Files.isRegularFile(manifest)
-                    || !embeddedManifest.equals(Files.readString(manifest, StandardCharsets.UTF_8));
-            if (!changed && Files.isRegularFile(updateDirectory.resolve("latest.apk"))) return;
-            Files.writeString(manifest, embeddedManifest, StandardCharsets.UTF_8);
-            try (var apkStream = getClass().getResourceAsStream("/updates/latest.apk")) {
-                Files.write(updateDirectory.resolve("latest.apk"), apkStream.readAllBytes());
-            }
-            ModServerStats.LOGGER.info("Android app update files prepared in {}", updateDirectory);
-        } catch (IOException | RuntimeException error) {
-            ModServerStats.LOGGER.warn("Could not prepare Android app update files: {}", error.getMessage());
-        }
     }
 
     private void acceptLoop() {
@@ -161,14 +133,6 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
             }
             if ("/health".equals(path)) {
                 respond(socket, 200, "OK", "{\"status\":\"ok\"}");
-                return;
-            }
-            if ("/api/app/update".equals(path)) {
-                respondUpdateManifest(socket);
-                return;
-            }
-            if ("/api/app/update/download".equals(path)) {
-                respondUpdateApk(socket);
                 return;
             }
             if ("/api/server/command".equals(path)) {
@@ -278,30 +242,6 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
             }
         });
         return result.get(10, TimeUnit.SECONDS);
-    }
-
-    private void respondUpdateManifest(Socket socket) throws IOException {
-        Path manifest = updateDirectory.resolve("latest.json");
-        if (!Files.isRegularFile(manifest)) {
-            respond(socket, 404, "Not Found", "{\"error\":\"update_not_configured\"}");
-            return;
-        }
-        long size = Files.size(manifest);
-        if (size > 64 * 1024) {
-            respond(socket, 413, "Payload Too Large", "{\"error\":\"update_manifest_too_large\"}");
-            return;
-        }
-        respond(socket, 200, "OK", Files.readString(manifest, StandardCharsets.UTF_8));
-    }
-
-    private void respondUpdateApk(Socket socket) throws IOException {
-        Path apk = updateDirectory.resolve("latest.apk");
-        if (!Files.isRegularFile(apk)) {
-            respond(socket, 404, "Not Found", "{\"error\":\"update_apk_not_found\"}");
-            return;
-        }
-        respondBytes(socket, 200, "OK", Files.readAllBytes(apk),
-                "application/vnd.android.package-archive");
     }
 
     private void respondConsole(Socket socket, String requestTarget) throws IOException {

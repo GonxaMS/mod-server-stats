@@ -76,7 +76,6 @@ public final class ServerStatsService {
         try {
             EmbeddedStatsApiServer api = new EmbeddedStatsApiServer(
                     event.getServer(), latestSnapshot, historyStore,
-                    FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("updates"),
                     ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean(), apiUsername, apiPassword,
                     legacyAuthToken.trim(), logBuffer);
             api.start(ServerStatsConfig.API_BIND_ADDRESS.get(), ServerStatsConfig.API_PORT.getAsInt());

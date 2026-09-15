@@ -69,8 +69,8 @@ public final class MainActivity extends Activity {
     private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
     private static final int MIN_API_TOKEN_LENGTH = 32;
     private static final int MIN_API_PASSWORD_LENGTH = 12;
-    private static final int CURRENT_VERSION_CODE = 24;
-    private static final String CURRENT_VERSION_NAME = "1.23";
+    private static final int CURRENT_VERSION_CODE = 25;
+    private static final String CURRENT_VERSION_NAME = "1.24";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";

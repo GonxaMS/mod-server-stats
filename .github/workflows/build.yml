@@ -34,12 +34,6 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Download Android APK for embedded update
-        uses: actions/download-artifact@v4
-        with:
-          name: mod-server-stats-android-apk
-          path: android-app/app/build/outputs/apk/debug
-
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 

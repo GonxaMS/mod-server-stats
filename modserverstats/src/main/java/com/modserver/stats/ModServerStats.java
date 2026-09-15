@@ -35,8 +35,6 @@ public final class ModServerStats {
                     modConfig.resolve("common.toml"));
             moveIfNeeded(config.resolve("modserverstats-history"),
                     modConfig.resolve("history"));
-            moveIfNeeded(config.resolve("modserverstats-updates"),
-                    modConfig.resolve("updates"));
         } catch (IOException error) {
             LOGGER.warn("Could not organize mod files under config/modserverstats: {}", error.getMessage());
         }
