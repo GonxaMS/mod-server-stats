@@ -1,6 +1,6 @@
 {
-  "versionCode": 22,
-  "versionName": "1.21",
-  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app-v1.21.apk",
-  "releaseNotes": "Interfaz limpia: se quitaron tutoriales, ayudas y mensajes artificiales de la consola"
+  "versionCode": 23,
+  "versionName": "1.22",
+  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app-v1.22.apk",
+  "releaseNotes": "Autenticacion por token entre la APK y la API del servidor"
 }

@@ -11,9 +11,11 @@ Aplicación Android sencilla para consultar directamente la API incluida en el m
      enabled = true
      port = 8080
      bindAddress = "0.0.0.0"
+     authToken = "el-mismo-token-del-servidor"
    ```
 
-2. Abre la aplicación, escribe la IP o dominio del servidor y el mismo puerto.
+2. Abre la aplicación, escribe la IP o dominio, el puerto y el mismo token en Ajustes.
+   El token debe tener al menos 32 caracteres.
 3. Pulsa **Actualizar**. Si quieres vigilarlo, activa la actualización automática y elige 5, 10, 30 o 60 segundos.
 
 En la pestaña **CLI** puedes ver la salida del servidor en tiempo real y enviar comandos. Para activarla, añade `consoleEnabled = true` dentro de `[api]` en la configuración del mod. La opción está desactivada por defecto.

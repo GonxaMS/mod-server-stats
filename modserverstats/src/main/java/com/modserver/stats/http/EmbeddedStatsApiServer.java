@@ -16,6 +16,7 @@ import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,6 +30,7 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     private final HistoryStore historyStore;
     private final Path updateDirectory;
     private final boolean consoleEnabled;
+    private final byte[] authTokenBytes;
     private final ConsoleLogBuffer consoleLogBuffer;
     private ServerSocket serverSocket;
     private ExecutorService requestExecutor;
@@ -36,12 +38,13 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
 
     public EmbeddedStatsApiServer(MinecraftServer server, AtomicReference<ServerSnapshot> latestSnapshot,
                                   HistoryStore historyStore, Path updateDirectory, boolean consoleEnabled,
-                                  ConsoleLogBuffer consoleLogBuffer) {
+                                  String authToken, ConsoleLogBuffer consoleLogBuffer) {
         this.server = server;
         this.latestSnapshot = latestSnapshot;
         this.historyStore = historyStore;
         this.updateDirectory = updateDirectory;
         this.consoleEnabled = consoleEnabled;
+        this.authTokenBytes = authToken.trim().getBytes(StandardCharsets.UTF_8);
         this.consoleLogBuffer = consoleLogBuffer;
     }
 
@@ -117,11 +120,17 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
             }
 
             String line;
+            String authorization = null;
             int headerCount = 0;
             while ((line = reader.readLine()) != null && !line.isEmpty()) {
                 if (++headerCount > 50 || line.length() > 8192) {
                     respond(socket, 400, "Bad Request", "{\"error\":\"too_many_headers\"}");
                     return;
+                }
+                int separator = line.indexOf(':');
+                if (separator > 0
+                        && "authorization".equalsIgnoreCase(line.substring(0, separator).trim())) {
+                    authorization = line.substring(separator + 1).trim();
                 }
             }
 
@@ -131,6 +140,10 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
             if (queryStart >= 0) path = path.substring(0, queryStart);
             if (!"GET".equalsIgnoreCase(requestParts[0])) {
                 respond(socket, 405, "Method Not Allowed", "{\"error\":\"method_not_allowed\"}");
+                return;
+            }
+            if (!isAuthorized(authorization)) {
+                respond(socket, 401, "Unauthorized", "{\"error\":\"unauthorized\"}");
                 return;
             }
             if ("/health".equals(path)) {
@@ -215,6 +228,19 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
         } catch (RuntimeException error) {
             ModServerStats.LOGGER.debug("Embedded Android API request failed: {}", error.getMessage());
         }
+    }
+
+    private boolean isAuthorized(String authorization) {
+        if (authorization == null) return false;
+        int separator = authorization.indexOf(' ');
+        if (separator <= 0
+                || !"Bearer".equalsIgnoreCase(authorization.substring(0, separator))) {
+            return false;
+        }
+        String suppliedToken = authorization.substring(separator + 1).trim();
+        if (suppliedToken.isEmpty()) return false;
+        return MessageDigest.isEqual(authTokenBytes,
+                suppliedToken.getBytes(StandardCharsets.UTF_8));
     }
 
     private String executeCommand(String command) throws Exception {

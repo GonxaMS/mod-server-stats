@@ -23,6 +23,7 @@ import android.os.SystemClock;
 import android.os.Build;
 import android.provider.Settings;
 import android.text.InputType;
+import android.text.method.PasswordTransformationMethod;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -65,8 +66,9 @@ public final class MainActivity extends Activity {
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
     private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
-    private static final int CURRENT_VERSION_CODE = 22;
-    private static final String CURRENT_VERSION_NAME = "1.21";
+    private static final int MIN_API_TOKEN_LENGTH = 32;
+    private static final int CURRENT_VERSION_CODE = 23;
+    private static final String CURRENT_VERSION_NAME = "1.22";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -89,6 +91,7 @@ public final class MainActivity extends Activity {
 
     private EditText addressInput;
     private EditText portInput;
+    private EditText apiTokenInput;
     private Button refreshButton;
     private TextView statusView;
     private LinearLayout statsContainer;
@@ -385,6 +388,15 @@ public final class MainActivity extends Activity {
         portInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         styleInput(portInput);
         connectionCard.addView(portInput, marginParams(dp(4)));
+        connectionCard.addView(label("Token de acceso"), marginParams(dp(8)));
+        apiTokenInput = new EditText(this);
+        apiTokenInput.setSingleLine(true);
+        apiTokenInput.setText(preferences.getString("apiToken", ""));
+        apiTokenInput.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        apiTokenInput.setTransformationMethod(PasswordTransformationMethod.getInstance());
+        styleInput(apiTokenInput);
+        connectionCard.addView(apiTokenInput, marginParams(dp(4)));
         content.addView(connectionCard, cardParams(dp(14)));
 
         LinearLayout refreshCard = card();
@@ -671,7 +683,14 @@ public final class MainActivity extends Activity {
             return;
         }
 
-        preferences.edit().putString("address", address).putString("port", portText).apply();
+        final String apiToken = currentApiToken();
+        if (!hasValidApiToken(apiToken)) {
+            showError("El token de acceso debe tener al menos 32 caracteres.");
+            return;
+        }
+
+        preferences.edit().putString("address", address).putString("port", portText)
+                .putString("apiToken", apiToken).apply();
         requestInProgress = true;
         refreshButton.setEnabled(false);
         statusView.setText("Conectando…");
@@ -683,6 +702,7 @@ public final class MainActivity extends Activity {
             try {
                 connection = (HttpURLConnection) new URL(endpoint).openConnection();
                 connection.setRequestMethod("GET");
+                applyApiToken(connection, apiToken);
                 connection.setConnectTimeout(5000);
                 connection.setReadTimeout(5000);
                 connection.setUseCaches(false);
@@ -760,6 +780,23 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private String currentApiToken() {
+        if (apiTokenInput == null) {
+            return preferences.getString("apiToken", "").trim();
+        }
+        return apiTokenInput.getText().toString().trim();
+    }
+
+    private static boolean hasValidApiToken(String token) {
+        return token != null && token.length() >= MIN_API_TOKEN_LENGTH;
+    }
+
+    private static void applyApiToken(HttpURLConnection connection, String token) {
+        if (token != null && !token.isEmpty()) {
+            connection.setRequestProperty("Authorization", "Bearer " + token);
+        }
+    }
+
     private void sendCommand() {
         if (commandInProgress || commandInput == null) return;
 
@@ -801,8 +838,15 @@ public final class MainActivity extends Activity {
             return;
         }
 
+        final String apiToken = currentApiToken();
+        if (!hasValidApiToken(apiToken)) {
+            appendConsoleLine("[error] el token debe tener al menos 32 caracteres");
+            return;
+        }
+
         final String commandToSend = command;
-        preferences.edit().putString("address", address).putString("port", portText).apply();
+        preferences.edit().putString("address", address).putString("port", portText)
+                .putString("apiToken", apiToken).apply();
         commandInProgress = true;
         commandSendButton.setEnabled(false);
         appendConsoleLine("> " + commandToSend);
@@ -813,6 +857,7 @@ public final class MainActivity extends Activity {
                 String commandUrl = endpoint + "?command=" + URLEncoder.encode(commandToSend, "UTF-8");
                 connection = (HttpURLConnection) new URL(commandUrl).openConnection();
                 connection.setRequestMethod("GET");
+                applyApiToken(connection, apiToken);
                 connection.setConnectTimeout(5000);
                 connection.setReadTimeout(12000);
                 connection.setUseCaches(false);
@@ -962,6 +1007,13 @@ public final class MainActivity extends Activity {
             return;
         }
 
+        final String apiToken = currentApiToken();
+        if (!hasValidApiToken(apiToken)) {
+            reportConsoleProblem("el token debe tener al menos 32 caracteres");
+            scheduleConsolePolling();
+            return;
+        }
+
         if (!endpoint.equals(consoleLoadedForEndpoint)) {
             consoleLoadedForEndpoint = endpoint;
             consoleCursor = 0L;
@@ -977,6 +1029,7 @@ public final class MainActivity extends Activity {
                 String consoleUrl = endpoint + "?after=" + after + "&limit=80";
                 connection = (HttpURLConnection) new URL(consoleUrl).openConnection();
                 connection.setRequestMethod("GET");
+                applyApiToken(connection, apiToken);
                 connection.setConnectTimeout(5000);
                 connection.setReadTimeout(7000);
                 connection.setUseCaches(false);
@@ -1354,6 +1407,11 @@ public final class MainActivity extends Activity {
 
     private void loadHistory(String statsEndpoint, StatsSample latestSample) {
         if (historyRequestInFlight) return;
+        final String apiToken = currentApiToken();
+        if (!hasValidApiToken(apiToken)) {
+            showError("El token de acceso debe tener al menos 32 caracteres.");
+            return;
+        }
         historyRequestInFlight = true;
         loadHistoryButton.setEnabled(false);
         statusView.setText("Cargando historial…");
@@ -1366,6 +1424,7 @@ public final class MainActivity extends Activity {
             try {
                 connection = (HttpURLConnection) new URL(historyEndpoint).openConnection();
                 connection.setRequestMethod("GET");
+                applyApiToken(connection, apiToken);
                 connection.setConnectTimeout(5000);
                 connection.setReadTimeout(5000);
                 int responseCode = connection.getResponseCode();

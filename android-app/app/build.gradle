@@ -2,8 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
-def appVersionCode = 22
-def appVersionName = '1.21'
+def appVersionCode = 23
+def appVersionName = '1.22'
 def stableSigningStoreFile = System.getenv('ANDROID_SIGNING_STORE_FILE')
 def stableSigningStorePassword = System.getenv('ANDROID_SIGNING_STORE_PASSWORD')
 def stableSigningKeyAlias = System.getenv('ANDROID_SIGNING_KEY_ALIAS')

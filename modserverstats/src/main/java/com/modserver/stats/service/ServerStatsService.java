@@ -41,6 +41,12 @@ public final class ServerStatsService {
             }
         }
         if (!ServerStatsConfig.API_ENABLED.getAsBoolean()) return;
+        String apiAuthToken = ServerStatsConfig.API_AUTH_TOKEN.get();
+        if (apiAuthToken == null || apiAuthToken.trim().length() < 32) {
+            ModServerStats.LOGGER.error(
+                    "Embedded Android API is disabled: configure api.authToken with at least 32 characters");
+            return;
+        }
         ConsoleLogBuffer logBuffer = null;
         if (ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean()) {
             try {
@@ -53,7 +59,7 @@ public final class ServerStatsService {
             EmbeddedStatsApiServer api = new EmbeddedStatsApiServer(
                     event.getServer(), latestSnapshot, historyStore,
                     FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("updates"),
-                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean(), logBuffer);
+                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean(), apiAuthToken.trim(), logBuffer);
             api.start(ServerStatsConfig.API_BIND_ADDRESS.get(), ServerStatsConfig.API_PORT.getAsInt());
             embeddedApi = api;
             consoleLogBuffer = logBuffer;

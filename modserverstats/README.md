@@ -12,6 +12,7 @@ El mod expone el estado del servidor directamente desde Minecraft. Edita
 enabled = true
 port = 8080
 bindAddress = "0.0.0.0"
+authToken = "pon-aqui-un-token-aleatorio-largo"
 consoleEnabled = false
 ```
 
@@ -24,6 +25,11 @@ http://SERVER_ADDRESS:PORT/api/server/stats
 El puerto de Minecraft (`25565`) y el puerto de la API deben ser diferentes.
 La API está desactivada por defecto.
 
+La API exige `Authorization: Bearer <token>` en todas sus rutas. Si
+`api.authToken` está vacío o tiene menos de 32 caracteres, la API no inicia.
+Usa un token aleatorio de al menos 32 caracteres y no lo publiques ni lo
+incluyas en Git.
+
 ## Consola CLI (opcional)
 
 Para habilitar la pestaña CLI de la aplicación, cambia `consoleEnabled` a
@@ -31,8 +37,11 @@ Para habilitar la pestaña CLI de la aplicación, cambia `consoleEnabled` a
 tiempo real mientras la pestaña esté abierta y podrá enviar comandos como
 `list`, `say mensaje` u `op jugador`, mostrando también la respuesta generada
 en cada ejecución. El mod conserva las últimas 500 líneas solo en memoria.
-La consola remota no tiene autenticación; mantenla desactivada salvo durante
-tus pruebas y no expongas ese puerto a Internet.
+La consola remota queda protegida por el mismo token. Mantenla desactivada
+cuando no la necesites y no expongas el puerto a Internet sin una capa cifrada.
+
+El token autentica al teléfono, pero `http://` no cifra el tráfico. Para una
+conexión por Internet usa `https://` mediante un proxy TLS o una VPN privada.
 
 La aplicación consulta incrementalmente la salida en:
 

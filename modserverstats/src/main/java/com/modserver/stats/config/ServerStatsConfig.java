@@ -33,6 +33,9 @@ public final class ServerStatsConfig {
     public static final ModConfigSpec.ConfigValue<String> API_BIND_ADDRESS = BUILDER
             .comment("Address to bind the embedded API to; use 0.0.0.0 for remote Android clients")
             .define("api.bindAddress", "0.0.0.0");
+    public static final ModConfigSpec.ConfigValue<String> API_AUTH_TOKEN = BUILDER
+            .comment("Bearer token required by every embedded API request; use at least 32 random characters")
+            .define("api.authToken", "");
     public static final ModConfigSpec.BooleanValue CONSOLE_ENABLED = BUILDER
             .comment("Expose the remote command console through the embedded Android API")
             .define("api.consoleEnabled", false);
