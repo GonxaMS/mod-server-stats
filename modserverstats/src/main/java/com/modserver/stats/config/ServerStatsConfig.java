@@ -42,10 +42,6 @@ public final class ServerStatsConfig {
     public static final ModConfigSpec.ConfigValue<String> API_AUTH_TOKEN = BUILDER
             .comment("Legacy bearer token accepted for migration; prefer api.username and api.password")
             .define("api.authToken", "");
-    public static final ModConfigSpec.BooleanValue CONSOLE_ENABLED = BUILDER
-            .comment("Expose the remote command console through the embedded Android API")
-            .define("api.consoleEnabled", false);
-
     public static final ModConfigSpec.BooleanValue HISTORY_ENABLED = BUILDER
             .comment("Store server snapshots on disk for historical Android charts")
             .define("history.enabled", true);

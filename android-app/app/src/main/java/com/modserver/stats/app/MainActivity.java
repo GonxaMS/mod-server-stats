@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.ActivityNotFoundException;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
@@ -26,10 +25,8 @@ import android.text.InputType;
 import android.text.method.PasswordTransformationMethod;
 import android.util.Base64;
 import android.view.Gravity;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.view.WindowInsets;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -54,7 +51,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -66,12 +62,10 @@ public final class MainActivity extends Activity {
     private static final String PREFERENCES = "server_connection";
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
-    private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
-    private static final int MAX_CONSOLE_CHARS = 32000;
     private static final int MIN_API_TOKEN_LENGTH = 32;
     private static final int MIN_API_PASSWORD_LENGTH = 12;
-    private static final int CURRENT_VERSION_CODE = 28;
-    private static final String CURRENT_VERSION_NAME = "1.27";
+    private static final int CURRENT_VERSION_CODE = 29;
+    private static final String CURRENT_VERSION_NAME = "1.28";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -107,10 +101,6 @@ public final class MainActivity extends Activity {
     private TextView updateView;
     private Button searchUpdateButton;
     private Button updateButton;
-    private EditText commandInput;
-    private Button commandSendButton;
-    private TextView commandOutputView;
-    private ScrollView consoleOutputScrollView;
     private Switch autoRefreshSwitch;
     private Spinner intervalSpinner;
     private ExecutorService executor;
@@ -129,24 +119,12 @@ public final class MainActivity extends Activity {
     private String availableVersionName;
     private File pendingUpdateApk;
     private final ArrayList<StatsSample> history = new ArrayList<>();
-    private final StringBuilder consoleTranscript = new StringBuilder();
-    private boolean commandInProgress;
-    private boolean consoleFollowTail = true;
-    private boolean consoleScrollProgrammatic;
-    private Runnable consolePollRunnable;
-    private boolean consoleScreenActive;
-    private boolean consolePolling;
-    private boolean consoleRequestInFlight;
-    private long consoleCursor;
-    private String consoleLoadedForEndpoint;
-    private String consoleLastError;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         configureSystemBars();
-        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
         preferences = getSharedPreferences(PREFERENCES, MODE_PRIVATE);
@@ -180,22 +158,18 @@ public final class MainActivity extends Activity {
         navigation.setElevation(0);
         TextView statusTab = navigationButton("Estado");
         TextView historyTab = navigationButton("Historial");
-        TextView consoleTab = navigationButton("CLI");
         TextView settingsTab = navigationButton("Ajustes");
         navigation.addView(statusTab, weightedWidth());
         navigation.addView(historyTab, weightedWidth());
-        navigation.addView(consoleTab, weightedWidth());
         navigation.addView(settingsTab, weightedWidth());
         root.addView(navigation, matchWidthWrapHeight());
 
         FrameLayout screens = new FrameLayout(this);
         View statusScreen = createStatusScreen();
         View historyScreen = createHistoryScreen();
-        View consoleScreen = createConsoleScreen();
         View settingsScreen = createSettingsScreen();
         screens.addView(statusScreen, frameMatchParams());
         screens.addView(historyScreen, frameMatchParams());
-        screens.addView(consoleScreen, frameMatchParams());
         screens.addView(settingsScreen, frameMatchParams());
         root.addView(screens, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -205,10 +179,8 @@ public final class MainActivity extends Activity {
             int bottomInset;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-                android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
                 topInset = bars.top;
-                // Keep the command field and execute button above the keyboard.
-                bottomInset = Math.max(bars.bottom, ime.bottom);
+                bottomInset = bars.bottom;
             } else {
                 topInset = insets.getSystemWindowInsetTop();
                 bottomInset = insets.getSystemWindowInsetBottom();
@@ -219,26 +191,15 @@ public final class MainActivity extends Activity {
         });
         root.post(root::requestApplyInsets);
 
-        View[] allScreens = {statusScreen, historyScreen, consoleScreen, settingsScreen};
-        TextView[] allTabs = {statusTab, historyTab, consoleTab, settingsTab};
+        View[] allScreens = {statusScreen, historyScreen, settingsScreen};
+        TextView[] allTabs = {statusTab, historyTab, settingsTab};
         statusTab.setOnClickListener(view -> {
-            consoleScreenActive = false;
-            stopConsolePolling();
             showScreen(statusScreen, statusTab, allScreens, allTabs);
         });
         historyTab.setOnClickListener(view -> {
-            consoleScreenActive = false;
-            stopConsolePolling();
             showScreen(historyScreen, historyTab, allScreens, allTabs);
         });
-        consoleTab.setOnClickListener(view -> {
-            consoleScreenActive = true;
-            showScreen(consoleScreen, consoleTab, allScreens, allTabs);
-            startConsolePolling();
-        });
         settingsTab.setOnClickListener(view -> {
-            consoleScreenActive = false;
-            stopConsolePolling();
             showScreen(settingsScreen, settingsTab, allScreens, allTabs);
         });
         showScreen(statusScreen, statusTab, allScreens, allTabs);
@@ -325,75 +286,6 @@ public final class MainActivity extends Activity {
             }
         });
         return scroll;
-    }
-
-    private View createConsoleScreen() {
-        LinearLayout screen = new LinearLayout(this);
-        screen.setOrientation(LinearLayout.VERTICAL);
-        screen.setBackgroundColor(COLOR_BACKGROUND);
-        screen.setPadding(dp(18), dp(14), dp(18), dp(12));
-
-        TextView heading = label("REMOTE CONSOLE // OPERATOR");
-        heading.setTextSize(20);
-        screen.addView(heading, matchWidthWrapHeight());
-
-        LinearLayout outputCard = card();
-        outputCard.setPadding(dp(12), dp(12), dp(12), dp(12));
-        TextView outputTitle = label("SERVER LOG // latest.log");
-        outputTitle.setTextColor(COLOR_GREEN);
-        outputCard.addView(outputTitle, marginParams(dp(6)));
-
-        consoleOutputScrollView = new ConsoleOutputScrollView(this);
-        consoleOutputScrollView.setFillViewport(true);
-        consoleOutputScrollView.setVerticalScrollBarEnabled(true);
-        consoleOutputScrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        // The card is the only frame. The scroll view must remain borderless so
-        // the live log does not look like a box inside another box.
-        consoleOutputScrollView.setBackgroundColor(Color.BLACK);
-        consoleOutputScrollView.setPadding(dp(6), dp(6), dp(6), dp(6));
-        commandOutputView = new TextView(this);
-        commandOutputView.setTextColor(COLOR_GREEN);
-        commandOutputView.setTextSize(12);
-        commandOutputView.setTypeface(Typeface.MONOSPACE);
-        commandOutputView.setGravity(Gravity.TOP | Gravity.START);
-        commandOutputView.setTextIsSelectable(true);
-        commandOutputView.setMinHeight(0);
-        commandOutputView.setIncludeFontPadding(true);
-        commandOutputView.setLineSpacing(0, 1.05f);
-        commandOutputView.setPadding(dp(4), dp(4), dp(4), dp(4));
-        commandOutputView.setBackgroundColor(Color.TRANSPARENT);
-        consoleOutputScrollView.addView(commandOutputView, new ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        LinearLayout.LayoutParams outputScrollParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        outputCard.addView(consoleOutputScrollView, outputScrollParams);
-        LinearLayout.LayoutParams outputCardParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        outputCardParams.topMargin = dp(12);
-        outputCardParams.bottomMargin = dp(8);
-        screen.addView(outputCard, outputCardParams);
-
-        commandInput = new EditText(this);
-        commandInput.setSingleLine(true);
-        commandInput.setHint("comando: list, say mensaje...");
-        commandInput.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        commandInput.setTextColor(COLOR_TEXT);
-        commandInput.setHintTextColor(COLOR_DIM);
-        commandInput.setTextSize(14);
-        commandInput.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        commandInput.setMinHeight(dp(48));
-        commandInput.setPadding(dp(12), dp(4), dp(12), dp(4));
-        commandInput.setBackground(roundBackground(COLOR_SURFACE_RAISED, COLOR_CYAN, 8));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            commandInput.setBackgroundTintList(null);
-        }
-        screen.addView(commandInput, marginParams(dp(6)));
-
-        commandSendButton = actionButton("[ EJECUTAR COMANDO ]", COLOR_MAGENTA);
-        commandSendButton.setOnClickListener(view -> sendCommand());
-        screen.addView(commandSendButton, marginParams(0));
-        return screen;
     }
 
     private View createSettingsScreen() {
@@ -859,110 +751,6 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void sendCommand() {
-        if (commandInProgress || commandInput == null) return;
-
-        String command = commandInput.getText().toString().trim();
-        if (command.startsWith("/")) command = command.substring(1).trim();
-        if (command.isEmpty()) {
-            appendConsoleLine("[error] escribe un comando primero");
-            return;
-        }
-        if (command.length() > 2048) {
-            appendConsoleLine("[error] el comando supera los 2048 caracteres");
-            return;
-        }
-
-        String address = addressInput.getText().toString().trim();
-        String portText = portInput.getText().toString().trim();
-        if (address.isEmpty()) {
-            appendConsoleLine("[error] configura la direccion del servidor en Ajustes");
-            return;
-        }
-
-        final int port;
-        try {
-            port = Integer.parseInt(portText);
-        } catch (NumberFormatException error) {
-            appendConsoleLine("[error] el puerto no es valido");
-            return;
-        }
-        if (port < 1 || port > 65535) {
-            appendConsoleLine("[error] el puerto debe estar entre 1 y 65535");
-            return;
-        }
-
-        final String endpoint;
-        try {
-            endpoint = buildEndpoint(address, port, "/api/server/command");
-        } catch (IllegalArgumentException error) {
-            appendConsoleLine("[error] " + error.getMessage());
-            return;
-        }
-
-        final String apiUsername = currentApiUsername();
-        final String apiPassword = currentApiPassword();
-        final String legacyApiToken = currentApiToken();
-        if (!hasValidApiCredentials(apiUsername, apiPassword)
-                && !hasValidApiToken(legacyApiToken)) {
-            appendConsoleLine("[error] configura usuario y contrasena en Ajustes");
-            return;
-        }
-
-        final String commandToSend = command;
-        preferences.edit().putString("address", address).putString("port", portText)
-                .putString("apiUsername", apiUsername).putString("apiPassword", apiPassword).apply();
-        commandInProgress = true;
-        commandSendButton.setEnabled(false);
-        appendConsoleLine("> " + commandToSend);
-
-        executor.execute(() -> {
-            HttpURLConnection connection = null;
-            try {
-                String commandUrl = endpoint + "?command=" + URLEncoder.encode(commandToSend, "UTF-8");
-                connection = (HttpURLConnection) new URL(commandUrl).openConnection();
-                connection.setRequestMethod("GET");
-                applyApiCredentials(connection, apiUsername, apiPassword, legacyApiToken);
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(12000);
-                connection.setUseCaches(false);
-
-                int responseCode = connection.getResponseCode();
-                InputStream responseStream = responseCode >= 200 && responseCode < 300
-                        ? connection.getInputStream() : connection.getErrorStream();
-                String responseBody = responseStream == null ? "" : readResponse(responseStream);
-                if (responseCode < 200 || responseCode >= 300) {
-                    String errorCode = responseErrorCode(responseBody);
-                    throw new IOException("HTTP " + responseCode
-                            + (errorCode.isEmpty() ? "" : " - " + errorCode));
-                }
-
-                String output = new JSONObject(responseBody).optString("output", "").trim();
-                runOnUiThread(() -> {
-                    commandInProgress = false;
-                    commandSendButton.setEnabled(true);
-                    if (!output.isEmpty()) {
-                        appendConsoleLine(output);
-                    }
-                    commandInput.requestFocus();
-                });
-            } catch (Exception error) {
-                String message = error.getMessage();
-                if (message == null || message.trim().isEmpty()) {
-                    message = error.getClass().getSimpleName();
-                }
-                final String errorMessage = message;
-                runOnUiThread(() -> {
-                    commandInProgress = false;
-                    commandSendButton.setEnabled(true);
-                    appendConsoleLine("[error] " + errorMessage);
-                });
-            } finally {
-                if (connection != null) connection.disconnect();
-            }
-        });
-    }
-
     private static String readResponse(InputStream stream) throws IOException {
         StringBuilder response = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
@@ -973,225 +761,6 @@ public final class MainActivity extends Activity {
             }
         }
         return response.toString();
-    }
-
-    private void appendConsoleLine(String text) {
-        if (commandOutputView == null) return;
-        boolean followTail = consoleFollowTail || isConsoleOutputAtBottom();
-        int previousScrollY = consoleOutputScrollView == null
-                ? 0 : consoleOutputScrollView.getScrollY();
-        if (consoleTranscript.length() > 0
-                && consoleTranscript.charAt(consoleTranscript.length() - 1) != '\n') {
-            consoleTranscript.append('\n');
-        }
-        consoleTranscript.append(text == null ? "" : text);
-        if (consoleTranscript.length() == 0
-                || consoleTranscript.charAt(consoleTranscript.length() - 1) != '\n') {
-            consoleTranscript.append('\n');
-        }
-        if (consoleTranscript.length() > MAX_CONSOLE_CHARS) {
-            int trimUntil = consoleTranscript.length() - MAX_CONSOLE_CHARS;
-            int nextLine = consoleTranscript.indexOf("\n", trimUntil);
-            consoleTranscript.delete(0, nextLine >= 0 ? nextLine + 1 : trimUntil);
-        }
-        commandOutputView.setText(consoleTranscript.toString());
-        if (consoleOutputScrollView != null) {
-            consoleOutputScrollView.postOnAnimation(() -> {
-                consoleScrollProgrammatic = true;
-                try {
-                    if (followTail) {
-                        consoleOutputScrollView.fullScroll(View.FOCUS_DOWN);
-                        consoleFollowTail = true;
-                    } else {
-                        int contentBottom = consoleOutputScrollView.getChildCount() == 0
-                                ? 0 : consoleOutputScrollView.getChildAt(0).getBottom();
-                        int viewportBottom = consoleOutputScrollView.getHeight()
-                                - consoleOutputScrollView.getPaddingBottom();
-                        int maxScrollY = Math.max(0, contentBottom - viewportBottom);
-                        consoleOutputScrollView.scrollTo(0,
-                                Math.min(previousScrollY, maxScrollY));
-                        consoleFollowTail = isConsoleOutputAtBottom();
-                    }
-                } finally {
-                    consoleScrollProgrammatic = false;
-                }
-            });
-        }
-    }
-
-    private boolean isConsoleOutputAtBottom() {
-        if (consoleOutputScrollView == null || commandOutputView == null) return true;
-        int viewportHeight = consoleOutputScrollView.getHeight()
-                - consoleOutputScrollView.getPaddingTop()
-                - consoleOutputScrollView.getPaddingBottom();
-        if (viewportHeight <= 0) return true;
-        int contentBottom = consoleOutputScrollView.getChildCount() == 0
-                ? commandOutputView.getBottom()
-                : consoleOutputScrollView.getChildAt(0).getBottom();
-        return consoleOutputScrollView.getScrollY() + viewportHeight
-                >= contentBottom - dp(12);
-    }
-
-    private void startConsolePolling() {
-        if (consolePolling) return;
-        consolePolling = true;
-        pollConsole();
-    }
-
-    private void stopConsolePolling() {
-        consolePolling = false;
-        if (mainHandler != null && consolePollRunnable != null) {
-            mainHandler.removeCallbacks(consolePollRunnable);
-        }
-        consolePollRunnable = null;
-    }
-
-    private void scheduleConsolePolling() {
-        if (!consolePolling || mainHandler == null) return;
-        if (consolePollRunnable == null) consolePollRunnable = this::pollConsole;
-        mainHandler.postDelayed(consolePollRunnable, CONSOLE_POLL_INTERVAL_MS);
-    }
-
-    private void pollConsole() {
-        if (!consolePolling || consoleRequestInFlight) return;
-        if (addressInput == null || portInput == null) {
-            reportConsoleProblem("configura el servidor en Ajustes");
-            scheduleConsolePolling();
-            return;
-        }
-
-        String address = addressInput.getText().toString().trim();
-        String portText = portInput.getText().toString().trim();
-        if (address.isEmpty()) {
-            reportConsoleProblem("configura la direccion del servidor en Ajustes");
-            scheduleConsolePolling();
-            return;
-        }
-
-        final int port;
-        try {
-            port = Integer.parseInt(portText);
-        } catch (NumberFormatException error) {
-            reportConsoleProblem("el puerto no es valido");
-            scheduleConsolePolling();
-            return;
-        }
-        if (port < 1 || port > 65535) {
-            reportConsoleProblem("el puerto debe estar entre 1 y 65535");
-            scheduleConsolePolling();
-            return;
-        }
-
-        final String endpoint;
-        try {
-            endpoint = buildEndpoint(address, port, "/api/server/console");
-        } catch (IllegalArgumentException error) {
-            reportConsoleProblem(error.getMessage());
-            scheduleConsolePolling();
-            return;
-        }
-
-        final String apiUsername = currentApiUsername();
-        final String apiPassword = currentApiPassword();
-        final String legacyApiToken = currentApiToken();
-        if (!hasValidApiCredentials(apiUsername, apiPassword)
-                && !hasValidApiToken(legacyApiToken)) {
-            reportConsoleProblem("configura usuario y contrasena en Ajustes");
-            scheduleConsolePolling();
-            return;
-        }
-
-        if (!endpoint.equals(consoleLoadedForEndpoint)) {
-            consoleLoadedForEndpoint = endpoint;
-            consoleCursor = 0L;
-            consoleLastError = null;
-            consoleTranscript.setLength(0);
-            consoleFollowTail = true;
-        }
-
-        final long after = consoleCursor;
-        consoleRequestInFlight = true;
-        executor.execute(() -> {
-            HttpURLConnection connection = null;
-            try {
-                String consoleUrl = endpoint + "?after=" + after + "&limit=200";
-                connection = (HttpURLConnection) new URL(consoleUrl).openConnection();
-                connection.setRequestMethod("GET");
-                applyApiCredentials(connection, apiUsername, apiPassword, legacyApiToken);
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(7000);
-                connection.setUseCaches(false);
-
-                int responseCode = connection.getResponseCode();
-                InputStream responseStream = responseCode >= 200 && responseCode < 300
-                        ? connection.getInputStream() : connection.getErrorStream();
-                String responseBody = responseStream == null ? "" : readResponse(responseStream);
-                if (responseCode < 200 || responseCode >= 300) {
-                    String errorCode = responseErrorCode(responseBody);
-                    throw new IOException("HTTP " + responseCode
-                            + (errorCode.isEmpty() ? "" : " - " + errorCode));
-                }
-
-                JSONObject payload = new JSONObject(responseBody);
-                runOnUiThread(() -> {
-                    consoleRequestInFlight = false;
-                    if (!consolePolling) return;
-                    if (!endpoint.equals(consoleLoadedForEndpoint)) {
-                        scheduleConsolePolling();
-                        return;
-                    }
-
-                    long remoteCursor = payload.optLong("cursor", consoleCursor);
-                    if (remoteCursor < consoleCursor || payload.optBoolean("truncated", false)) {
-                        consoleTranscript.setLength(0);
-                        consoleFollowTail = true;
-                    }
-                    JSONArray lines = payload.optJSONArray("lines");
-                    if (lines != null) {
-                        StringBuilder received = new StringBuilder();
-                        for (int index = 0; index < lines.length(); index++) {
-                            JSONObject line = lines.optJSONObject(index);
-                            if (line == null) continue;
-                            if (received.length() > 0) received.append('\n');
-                            received.append(line.optString("text", ""));
-                        }
-                        if (received.length() > 0) appendConsoleLine(received.toString());
-                    }
-                    consoleCursor = remoteCursor;
-                    consoleLastError = null;
-                    scheduleConsolePolling();
-                });
-            } catch (Exception error) {
-                String message = error.getMessage();
-                if (message == null || message.trim().isEmpty()) {
-                    message = error.getClass().getSimpleName();
-                }
-                final String errorMessage = message;
-                runOnUiThread(() -> {
-                    consoleRequestInFlight = false;
-                    if (consolePolling) {
-                        reportConsoleProblem(errorMessage);
-                        scheduleConsolePolling();
-                    }
-                });
-            } finally {
-                if (connection != null) connection.disconnect();
-            }
-        });
-    }
-
-    private void reportConsoleProblem(String message) {
-        if (message == null || message.equals(consoleLastError)) return;
-        consoleLastError = message;
-        appendConsoleLine("[link] " + message);
-    }
-
-    private static String responseErrorCode(String responseBody) {
-        try {
-            return new JSONObject(responseBody).optString("error", "").trim();
-        } catch (Exception ignored) {
-            return "";
-        }
     }
 
     private void renderEmptyStats() {
@@ -1381,50 +950,6 @@ public final class MainActivity extends Activity {
                 canvas.drawRoundRect(new RectF(0, -glowInset, fillWidth,
                         height + glowInset), radius + glowInset, radius + glowInset, glowPaint);
                 canvas.drawRoundRect(new RectF(0, 0, fillWidth, height), radius, radius, fillPaint);
-            }
-        }
-    }
-
-    /** Keeps the live output scrollable without letting the outer screen consume the gesture. */
-    private final class ConsoleOutputScrollView extends ScrollView {
-        private boolean userTouchActive;
-
-        ConsoleOutputScrollView(Context context) {
-            super(context);
-        }
-
-        @Override
-        public boolean dispatchTouchEvent(MotionEvent event) {
-            ViewParent parent = getParent();
-            int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_DOWN && parent != null) {
-                userTouchActive = true;
-                parent.requestDisallowInterceptTouchEvent(true);
-            } else if ((action == MotionEvent.ACTION_UP
-                    || action == MotionEvent.ACTION_CANCEL) && parent != null) {
-                parent.requestDisallowInterceptTouchEvent(false);
-            }
-            boolean handled = super.dispatchTouchEvent(event);
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                // Let the final scroll position settle before deciding whether
-                // the user is still following the end of the log.
-                post(() -> {
-                    if (!consoleScrollProgrammatic) {
-                        consoleFollowTail = isConsoleOutputAtBottom();
-                    }
-                });
-                userTouchActive = false;
-            }
-            return handled;
-        }
-
-        @Override
-        protected void onScrollChanged(int left, int top, int oldLeft, int oldTop) {
-            super.onScrollChanged(left, top, oldLeft, oldTop);
-            // Ignore scroll changes caused by setText/layout. Only a real
-            // touch gesture is allowed to disable follow-tail mode.
-            if (userTouchActive && !consoleScrollProgrammatic) {
-                consoleFollowTail = isConsoleOutputAtBottom();
             }
         }
     }
@@ -1886,22 +1411,17 @@ public final class MainActivity extends Activity {
         if (autoRefreshSwitch != null && autoRefreshSwitch.isChecked()) {
             startAutoRefresh();
         }
-        if (consoleScreenActive) {
-            startConsolePolling();
-        }
     }
 
     @Override
     protected void onStop() {
         stopAutoRefresh();
-        stopConsolePolling();
         super.onStop();
     }
 
     @Override
     protected void onDestroy() {
         stopAutoRefresh();
-        stopConsolePolling();
         if (executor != null) {
             executor.shutdownNow();
         }

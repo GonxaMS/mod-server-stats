@@ -2,14 +2,13 @@ package com.modserver.stats.service;
 
 import com.modserver.stats.ModServerStats;
 import com.modserver.stats.config.ServerStatsConfig;
-import com.modserver.stats.http.ConsoleLogBuffer;
 import com.modserver.stats.http.EmbeddedStatsApiServer;
-import com.modserver.stats.http.ServerLogTail;
 import com.modserver.stats.http.TelemetryHttpClient;
 import com.modserver.stats.model.ServerSnapshot;
 import com.modserver.stats.storage.HistoryStore;
-import net.neoforged.fml.loading.FMLPaths;
+import com.modserver.stats.storage.SqliteLogging;
 import net.minecraft.server.MinecraftServer;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
@@ -24,17 +23,13 @@ public final class ServerStatsService {
     private final AtomicBoolean requestInFlight = new AtomicBoolean();
     private final AtomicReference<ServerSnapshot> latestSnapshot = new AtomicReference<>();
     private volatile EmbeddedStatsApiServer embeddedApi;
-    private volatile ServerLogTail serverLogTail;
     private volatile HistoryStore historyStore;
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         boolean historyEnabled = ServerStatsConfig.HISTORY_ENABLED.getAsBoolean();
-        boolean consoleEnabled = ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean();
-        if (historyEnabled || consoleEnabled) {
-            ConsoleLogBuffer.silenceSqliteTrace();
-        }
         if (historyEnabled) {
+            SqliteLogging.silenceTrace();
             try {
                 historyStore = new HistoryStore(
                         FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("history"),
@@ -69,18 +64,12 @@ public final class ServerStatsService {
                     "Embedded Android API is using the legacy bearer token; configure api.username/api.password");
         }
         if (!legacyTokenConfigured) legacyAuthToken = "";
-        ServerLogTail logTail = null;
-        if (consoleEnabled) {
-            logTail = new ServerLogTail(FMLPaths.GAMEDIR.get().resolve("logs").resolve("latest.log"));
-        }
         try {
             EmbeddedStatsApiServer api = new EmbeddedStatsApiServer(
-                    event.getServer(), latestSnapshot, historyStore,
-                    consoleEnabled, apiUsername, apiPassword,
-                    legacyAuthToken.trim(), logTail);
+                    latestSnapshot, historyStore,
+                    apiUsername, apiPassword, legacyAuthToken.trim());
             api.start(ServerStatsConfig.API_BIND_ADDRESS.get(), ServerStatsConfig.API_PORT.getAsInt());
             embeddedApi = api;
-            serverLogTail = logTail;
         } catch (IOException | RuntimeException error) {
             ModServerStats.LOGGER.error("Embedded Android API could not start on port {}: {}",
                     ServerStatsConfig.API_PORT.getAsInt(), error.getMessage());
@@ -92,7 +81,6 @@ public final class ServerStatsService {
         EmbeddedStatsApiServer api = embeddedApi;
         embeddedApi = null;
         if (api != null) api.close();
-        serverLogTail = null;
         HistoryStore store = historyStore;
         historyStore = null;
         if (store != null) store.close();

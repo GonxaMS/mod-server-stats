@@ -14,17 +14,12 @@ Aplicacion Android para consultar la API incluida en el mod NeoForge
    bindAddress = "0.0.0.0"
    username = "admin"
    password = "pon-una-clave-de-12-o-mas-caracteres"
-   consoleEnabled = true
    ```
 
 2. Abre la app y escribe la direccion, el puerto, el usuario y la contrasena
    en **Ajustes**.
 3. Pulsa **Actualizar**. La app guarda esos datos en el telefono y los usa
    automaticamente en las siguientes aperturas.
-
-La pestana **CLI** sigue `logs/latest.log` y muestra las nuevas lineas sin
-recargar el archivo completo. Tambien permite enviar comandos cuando
-`consoleEnabled` esta activo. La cuenta de la API protege ambas operaciones.
 
 La aplicacion muestra jugadores, TPS, MSPT, memoria, uptime y CPU cuando Java
 expone esas metricas. El historial se guarda en SQLite dentro del servidor y

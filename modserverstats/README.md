@@ -1,7 +1,7 @@
 # Mod Server Stats
 
-Mod NeoForge 1.21.1 que expone metricas del servidor y una consola remota
-opcional para la aplicacion Android.
+Mod NeoForge 1.21.1 que expone metricas del servidor y un historial compacto
+para la aplicacion Android.
 
 ## API integrada
 
@@ -14,7 +14,6 @@ port = 8080
 bindAddress = "0.0.0.0"
 username = "admin"
 password = "pon-una-clave-de-12-o-mas-caracteres"
-consoleEnabled = false
 ```
 
 La aplicacion usa esa cuenta y guarda las credenciales en el almacenamiento
@@ -34,17 +33,6 @@ de 12 caracteres.
 Las instalaciones anteriores pueden seguir usando `api.authToken` como
 autenticacion Bearer durante la migracion, pero las nuevas deben usar usuario
 y contrasena.
-
-## Consola CLI (opcional)
-
-Para habilitar la pestana CLI, cambia `consoleEnabled = true` dentro de
-`[api]`. La consola queda protegida por la misma cuenta y permite consultar
-la salida en tiempo real o enviar comandos como `list`, `say mensaje` u
-`op jugador`.
-
-La consola lee incrementalmente `logs/latest.log`: solo procesa los bytes nuevos
-desde la ultima consulta y conserva un tramo reciente acotado en memoria. Asi la
-app puede seguir la salida sin recargar el archivo completo en cada consulta.
 
 La autenticacion Basic no cifra el trafico. Para exponer la API en Internet
 usa HTTPS mediante un proxy TLS o una VPN privada; no publiques el puerto HTTP
