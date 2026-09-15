@@ -41,12 +41,30 @@ public final class ServerStatsService {
             }
         }
         if (!ServerStatsConfig.API_ENABLED.getAsBoolean()) return;
-        String apiAuthToken = ServerStatsConfig.API_AUTH_TOKEN.get();
-        if (apiAuthToken == null || apiAuthToken.trim().length() < 32) {
+        String apiUsername = ServerStatsConfig.API_USERNAME.get();
+        String apiPassword = ServerStatsConfig.API_PASSWORD.get();
+        String legacyAuthToken = ServerStatsConfig.API_AUTH_TOKEN.get();
+        boolean accountConfigured = apiUsername != null && !apiUsername.trim().isEmpty()
+                && apiPassword != null && apiPassword.trim().length() >= 12;
+        boolean legacyTokenConfigured = legacyAuthToken != null && legacyAuthToken.trim().length() >= 32;
+        if (!accountConfigured && !legacyTokenConfigured) {
             ModServerStats.LOGGER.error(
-                    "Embedded Android API is disabled: configure api.authToken with at least 32 characters");
+                    "Embedded Android API is disabled: configure api.username and api.password "
+                            + "(password at least 12 characters)");
             return;
         }
+        if (accountConfigured) {
+            apiUsername = apiUsername.trim();
+            apiPassword = apiPassword.trim();
+            ModServerStats.LOGGER.info("Embedded Android API account authentication enabled for user '{}'",
+                    apiUsername);
+        } else {
+            apiUsername = "";
+            apiPassword = "";
+            ModServerStats.LOGGER.warn(
+                    "Embedded Android API is using the legacy bearer token; configure api.username/api.password");
+        }
+        if (!legacyTokenConfigured) legacyAuthToken = "";
         ConsoleLogBuffer logBuffer = null;
         if (ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean()) {
             try {
@@ -59,7 +77,8 @@ public final class ServerStatsService {
             EmbeddedStatsApiServer api = new EmbeddedStatsApiServer(
                     event.getServer(), latestSnapshot, historyStore,
                     FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("updates"),
-                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean(), apiAuthToken.trim(), logBuffer);
+                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean(), apiUsername, apiPassword,
+                    legacyAuthToken.trim(), logBuffer);
             api.start(ServerStatsConfig.API_BIND_ADDRESS.get(), ServerStatsConfig.API_PORT.getAsInt());
             embeddedApi = api;
             consoleLogBuffer = logBuffer;

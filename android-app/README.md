@@ -1,6 +1,7 @@
 # Mod Server Stats Android
 
-Aplicación Android sencilla para consultar directamente la API incluida en el mod NeoForge `modserverstats`.
+Aplicacion Android para consultar la API incluida en el mod NeoForge
+`modserverstats`.
 
 ## Uso
 
@@ -8,33 +9,40 @@ Aplicación Android sencilla para consultar directamente la API incluida en el m
 
    ```toml
    [api]
-     enabled = true
-     port = 8080
-     bindAddress = "0.0.0.0"
-     authToken = "el-mismo-token-del-servidor"
+   enabled = true
+   port = 8080
+   bindAddress = "0.0.0.0"
+   username = "admin"
+   password = "pon-una-clave-de-12-o-mas-caracteres"
+   consoleEnabled = true
    ```
 
-2. Abre la aplicación, escribe la IP o dominio, el puerto y el mismo token en Ajustes.
-   El token debe tener al menos 32 caracteres.
-3. Pulsa **Actualizar**. Si quieres vigilarlo, activa la actualización automática y elige 5, 10, 30 o 60 segundos.
+2. Abre la app y escribe la direccion, el puerto, el usuario y la contrasena
+   en **Ajustes**.
+3. Pulsa **Actualizar**. La app guarda esos datos en el telefono y los usa
+   automaticamente en las siguientes aperturas.
 
-En la pestaña **CLI** puedes ver la salida del servidor en tiempo real y enviar comandos. Para activarla, añade `consoleEnabled = true` dentro de `[api]` en la configuración del mod. La opción está desactivada por defecto.
+La pestana **CLI** muestra la salida del servidor y permite enviar comandos
+cuando `consoleEnabled` esta activo. La cuenta de la API protege tambien esa
+consola.
 
-La aplicación consulta `http://DIRECCION:PUERTO/api/server/stats`. El botón de puerto permite usar el puerto que te haya asignado el proveedor del servidor.
+La aplicacion muestra jugadores, TPS, MSPT, memoria, uptime y CPU cuando Java
+expone esas metricas. El historial se guarda en SQLite dentro del servidor y
+se puede consultar por periodo desde la pestana **Historial**.
 
-Además de jugadores, TPS, MSPT, memoria y uptime, muestra el uso de CPU del proceso de Minecraft y la carga total del sistema cuando la JVM proporciona esas métricas.
+El puerto de Minecraft (`25565`) y el de la API deben ser distintos. Desde el
+emulador Android, `10.0.2.2` apunta al ordenador anfitrion.
 
-El selector de gráficos muestra el historial de TPS, MSPT, CPU, memoria, jugadores o latencia. Al conectar, la aplicación solicita las últimas seis horas guardadas por el mod; si no hay historial aún, comienza a registrar la sesión actual.
+La app usa HTTP Basic. HTTP sin TLS no cifra usuario ni contrasena; para un
+servidor accesible desde Internet usa HTTPS mediante una VPN o un proxy TLS.
 
-## Actualizaciones de la app
+## Actualizaciones
 
-La aplicación consulta manualmente el manifiesto público de GitHub Releases y descarga desde allí la APK indicada. El enlace está integrado en la app y el mod no necesita actualizarse cuando se publica una nueva versión de la app.
+La app busca actualizaciones solo cuando pulsas el boton correspondiente en
+**Ajustes**. El enlace de GitHub esta integrado y la APK se publica con su
+version en el nombre.
 
-Cada Release publica la APK con su versión en el nombre, por ejemplo `mod-server-stats-app-v1.15.apk`, junto con `latest.json`. Las APK de Release se firman con una clave estable para permitir actualizaciones normales.
-
-No uses `localhost` desde el teléfono salvo que el servidor de Minecraft esté ejecutándose en el propio teléfono. Desde el emulador Android, `10.0.2.2` apunta al ordenador anfitrión.
-
-## Compilación
+## Compilacion
 
 Con Java 17 y el SDK de Android instalado:
 
@@ -42,4 +50,4 @@ Con Java 17 y el SDK de Android instalado:
 gradlew.bat assembleDebug
 ```
 
-El APK queda en `app/build/outputs/apk/debug/app-debug.apk`.
+La APK queda en `app/build/outputs/apk/debug/app-debug.apk`.

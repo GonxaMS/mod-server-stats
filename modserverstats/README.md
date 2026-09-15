@@ -1,64 +1,59 @@
 # Mod Server Stats
 
-Mod NeoForge 1.21.1 para consultar métricas del servidor desde una aplicación Android.
+Mod NeoForge 1.21.1 que expone metricas del servidor y una consola remota
+opcional para la aplicacion Android.
 
 ## API integrada
 
-El mod expone el estado del servidor directamente desde Minecraft. Edita
-`config/modserverstats/common.toml` y configura el puerto asignado:
+Edita `config/modserverstats/common.toml` despues del primer arranque:
 
 ```toml
 [api]
 enabled = true
 port = 8080
 bindAddress = "0.0.0.0"
-authToken = "pon-aqui-un-token-aleatorio-largo"
+username = "admin"
+password = "pon-una-clave-de-12-o-mas-caracteres"
 consoleEnabled = false
 ```
 
-La aplicación Android puede leer el JSON con una petición `GET` a:
+La aplicacion usa esa cuenta y guarda las credenciales en el almacenamiento
+privado del telefono. Al volver a abrirla no hay que copiar ningun token.
+El nombre y la contrasena son de la API del mod, no una cuenta de Minecraft.
+
+La API responde en:
 
 ```text
 http://SERVER_ADDRESS:PORT/api/server/stats
 ```
 
 El puerto de Minecraft (`25565`) y el puerto de la API deben ser diferentes.
-La API está desactivada por defecto.
+La API esta desactivada por defecto y no arranca si la contrasena tiene menos
+de 12 caracteres.
 
-La API exige `Authorization: Bearer <token>` en todas sus rutas. Si
-`api.authToken` está vacío o tiene menos de 32 caracteres, la API no inicia.
-Usa un token aleatorio de al menos 32 caracteres y no lo publiques ni lo
-incluyas en Git.
+Las instalaciones anteriores pueden seguir usando `api.authToken` como
+autenticacion Bearer durante la migracion, pero las nuevas deben usar usuario
+y contrasena.
 
 ## Consola CLI (opcional)
 
-Para habilitar la pestaña CLI de la aplicación, cambia `consoleEnabled` a
-`true` dentro de `[api]`. La aplicación recibirá la salida del servidor en
-tiempo real mientras la pestaña esté abierta y podrá enviar comandos como
-`list`, `say mensaje` u `op jugador`, mostrando también la respuesta generada
-en cada ejecución. El mod conserva las últimas 500 líneas solo en memoria.
-La consola remota queda protegida por el mismo token. Mantenla desactivada
-cuando no la necesites y no expongas el puerto a Internet sin una capa cifrada.
+Para habilitar la pestana CLI, cambia `consoleEnabled = true` dentro de
+`[api]`. La consola queda protegida por la misma cuenta y permite consultar
+la salida en tiempo real o enviar comandos como `list`, `say mensaje` u
+`op jugador`.
 
-El token autentica al teléfono, pero `http://` no cifra el tráfico. Para una
-conexión por Internet usa `https://` mediante un proxy TLS o una VPN privada.
+El mod conserva las ultimas 500 lineas solo en memoria. Manten la consola
+desactivada cuando no la necesites.
 
-La aplicación consulta incrementalmente la salida en:
-
-```text
-http://SERVER_ADDRESS:PORT/api/server/console?after=CURSOR&limit=80
-```
-
-La respuesta incluye `processCpuPercent` para la JVM de Minecraft y
-`systemCpuPercent` para el equipo. Cualquiera puede ser `null` si Java no
-expone esa métrica.
+La autenticacion Basic no cifra el trafico. Para exponer la API en Internet
+usa HTTPS mediante un proxy TLS o una VPN privada; no publiques el puerto HTTP
+directamente.
 
 ## Historial persistente
 
 Por defecto, el mod guarda una fila compacta de SQLite cada 30 segundos en
-`config/modserverstats/history/stats.db`. Conserva 30 días y escribe en un
-hilo secundario. El historial guarda solo métricas y cantidad de jugadores;
-no guarda nombres ni UUID.
+`config/modserverstats/history/stats.db`. Conserva 30 dias y solo guarda
+metricas y cantidad de jugadores.
 
 ```toml
 [history]
@@ -68,7 +63,7 @@ retentionDays = 30
 maxSamplesPerRequest = 720
 ```
 
-Las muestras históricas están disponibles para la aplicación Android y otros clientes en:
+El historial se consulta con:
 
 ```text
 http://SERVER_ADDRESS:PORT/api/server/history?minutes=360&limit=720

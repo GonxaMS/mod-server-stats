@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,6 +31,7 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     private final HistoryStore historyStore;
     private final Path updateDirectory;
     private final boolean consoleEnabled;
+    private final byte[] basicCredentialsBytes;
     private final byte[] authTokenBytes;
     private final ConsoleLogBuffer consoleLogBuffer;
     private ServerSocket serverSocket;
@@ -38,13 +40,24 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
 
     public EmbeddedStatsApiServer(MinecraftServer server, AtomicReference<ServerSnapshot> latestSnapshot,
                                   HistoryStore historyStore, Path updateDirectory, boolean consoleEnabled,
-                                  String authToken, ConsoleLogBuffer consoleLogBuffer) {
+                                  String username, String password, String authToken,
+                                  ConsoleLogBuffer consoleLogBuffer) {
         this.server = server;
         this.latestSnapshot = latestSnapshot;
         this.historyStore = historyStore;
         this.updateDirectory = updateDirectory;
         this.consoleEnabled = consoleEnabled;
-        this.authTokenBytes = authToken.trim().getBytes(StandardCharsets.UTF_8);
+        String normalizedUsername = username == null ? "" : username.trim();
+        String normalizedPassword = password == null ? "" : password.trim();
+        String basicCredentials = normalizedUsername.isEmpty() || normalizedPassword.isEmpty()
+                ? ""
+                : normalizedUsername + ":" + normalizedPassword;
+        this.basicCredentialsBytes = basicCredentials.isEmpty()
+                ? new byte[0]
+                : Base64.getEncoder().encodeToString(basicCredentials.getBytes(StandardCharsets.UTF_8))
+                        .getBytes(StandardCharsets.UTF_8);
+        this.authTokenBytes = (authToken == null ? "" : authToken.trim())
+                .getBytes(StandardCharsets.UTF_8);
         this.consoleLogBuffer = consoleLogBuffer;
     }
 
@@ -233,14 +246,21 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     private boolean isAuthorized(String authorization) {
         if (authorization == null) return false;
         int separator = authorization.indexOf(' ');
-        if (separator <= 0
-                || !"Bearer".equalsIgnoreCase(authorization.substring(0, separator))) {
+        if (separator <= 0) {
             return false;
         }
-        String suppliedToken = authorization.substring(separator + 1).trim();
-        if (suppliedToken.isEmpty()) return false;
-        return MessageDigest.isEqual(authTokenBytes,
-                suppliedToken.getBytes(StandardCharsets.UTF_8));
+        String scheme = authorization.substring(0, separator);
+        String suppliedCredentials = authorization.substring(separator + 1).trim();
+        if (suppliedCredentials.isEmpty()) return false;
+        if ("Basic".equalsIgnoreCase(scheme) && basicCredentialsBytes.length > 0) {
+            return MessageDigest.isEqual(basicCredentialsBytes,
+                    suppliedCredentials.getBytes(StandardCharsets.UTF_8));
+        }
+        if ("Bearer".equalsIgnoreCase(scheme) && authTokenBytes.length > 0) {
+            return MessageDigest.isEqual(authTokenBytes,
+                    suppliedCredentials.getBytes(StandardCharsets.UTF_8));
+        }
+        return false;
     }
 
     private String executeCommand(String command) throws Exception {
