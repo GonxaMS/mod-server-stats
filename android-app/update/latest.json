@@ -1,6 +1,6 @@
 {
-  "versionCode": 25,
-  "versionName": "1.24",
-  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app-v1.24.apk",
-  "releaseNotes": "Mod y APK se distribuyen por separado; acceso con cuenta"
+  "versionCode": 26,
+  "versionName": "1.25",
+  "downloadUrl": "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/mod-server-stats-app-v1.25.apk",
+  "releaseNotes": "CLI a pantalla completa, visor de latest.log y ajuste con teclado"
 }

@@ -22,9 +22,9 @@ Aplicacion Android para consultar la API incluida en el mod NeoForge
 3. Pulsa **Actualizar**. La app guarda esos datos en el telefono y los usa
    automaticamente en las siguientes aperturas.
 
-La pestana **CLI** muestra la salida del servidor y permite enviar comandos
-cuando `consoleEnabled` esta activo. La cuenta de la API protege tambien esa
-consola.
+La pestana **CLI** sigue `logs/latest.log` y muestra las nuevas lineas sin
+recargar el archivo completo. Tambien permite enviar comandos cuando
+`consoleEnabled` esta activo. La cuenta de la API protege ambas operaciones.
 
 La aplicacion muestra jugadores, TPS, MSPT, memoria, uptime y CPU cuando Java
 expone esas metricas. El historial se guarda en SQLite dentro del servidor y

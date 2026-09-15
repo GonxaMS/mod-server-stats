@@ -4,6 +4,7 @@ import com.modserver.stats.ModServerStats;
 import com.modserver.stats.config.ServerStatsConfig;
 import com.modserver.stats.http.ConsoleLogBuffer;
 import com.modserver.stats.http.EmbeddedStatsApiServer;
+import com.modserver.stats.http.ServerLogTail;
 import com.modserver.stats.http.TelemetryHttpClient;
 import com.modserver.stats.model.ServerSnapshot;
 import com.modserver.stats.storage.HistoryStore;
@@ -23,14 +24,17 @@ public final class ServerStatsService {
     private final AtomicBoolean requestInFlight = new AtomicBoolean();
     private final AtomicReference<ServerSnapshot> latestSnapshot = new AtomicReference<>();
     private volatile EmbeddedStatsApiServer embeddedApi;
-    private volatile ConsoleLogBuffer consoleLogBuffer;
+    private volatile ServerLogTail serverLogTail;
     private volatile HistoryStore historyStore;
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         boolean historyEnabled = ServerStatsConfig.HISTORY_ENABLED.getAsBoolean();
-        if (historyEnabled) {
+        boolean consoleEnabled = ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean();
+        if (historyEnabled || consoleEnabled) {
             ConsoleLogBuffer.silenceSqliteTrace();
+        }
+        if (historyEnabled) {
             try {
                 historyStore = new HistoryStore(
                         FMLPaths.CONFIGDIR.get().resolve("modserverstats").resolve("history"),
@@ -65,24 +69,19 @@ public final class ServerStatsService {
                     "Embedded Android API is using the legacy bearer token; configure api.username/api.password");
         }
         if (!legacyTokenConfigured) legacyAuthToken = "";
-        ConsoleLogBuffer logBuffer = null;
-        if (ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean()) {
-            try {
-                logBuffer = ConsoleLogBuffer.install();
-            } catch (RuntimeException error) {
-                ModServerStats.LOGGER.error("Console log capture could not start: {}", error.getMessage());
-            }
+        ServerLogTail logTail = null;
+        if (consoleEnabled) {
+            logTail = new ServerLogTail(FMLPaths.GAMEDIR.get().resolve("logs").resolve("latest.log"));
         }
         try {
             EmbeddedStatsApiServer api = new EmbeddedStatsApiServer(
                     event.getServer(), latestSnapshot, historyStore,
-                    ServerStatsConfig.CONSOLE_ENABLED.getAsBoolean(), apiUsername, apiPassword,
-                    legacyAuthToken.trim(), logBuffer);
+                    consoleEnabled, apiUsername, apiPassword,
+                    legacyAuthToken.trim(), logTail);
             api.start(ServerStatsConfig.API_BIND_ADDRESS.get(), ServerStatsConfig.API_PORT.getAsInt());
             embeddedApi = api;
-            consoleLogBuffer = logBuffer;
+            serverLogTail = logTail;
         } catch (IOException | RuntimeException error) {
-            if (logBuffer != null) logBuffer.close();
             ModServerStats.LOGGER.error("Embedded Android API could not start on port {}: {}",
                     ServerStatsConfig.API_PORT.getAsInt(), error.getMessage());
         }
@@ -93,9 +92,7 @@ public final class ServerStatsService {
         EmbeddedStatsApiServer api = embeddedApi;
         embeddedApi = null;
         if (api != null) api.close();
-        ConsoleLogBuffer logBuffer = consoleLogBuffer;
-        consoleLogBuffer = null;
-        if (logBuffer != null) logBuffer.close();
+        serverLogTail = null;
         HistoryStore store = historyStore;
         historyStore = null;
         if (store != null) store.close();

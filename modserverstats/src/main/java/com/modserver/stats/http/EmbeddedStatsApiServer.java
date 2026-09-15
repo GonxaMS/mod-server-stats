@@ -30,7 +30,7 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     private final boolean consoleEnabled;
     private final byte[] basicCredentialsBytes;
     private final byte[] authTokenBytes;
-    private final ConsoleLogBuffer consoleLogBuffer;
+    private final ServerLogTail serverLogTail;
     private ServerSocket serverSocket;
     private ExecutorService requestExecutor;
     private Thread acceptThread;
@@ -38,7 +38,7 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
     public EmbeddedStatsApiServer(MinecraftServer server, AtomicReference<ServerSnapshot> latestSnapshot,
                                   HistoryStore historyStore, boolean consoleEnabled,
                                   String username, String password, String authToken,
-                                  ConsoleLogBuffer consoleLogBuffer) {
+                                  ServerLogTail serverLogTail) {
         this.server = server;
         this.latestSnapshot = latestSnapshot;
         this.historyStore = historyStore;
@@ -54,7 +54,7 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
                         .getBytes(StandardCharsets.UTF_8);
         this.authTokenBytes = (authToken == null ? "" : authToken.trim())
                 .getBytes(StandardCharsets.UTF_8);
-        this.consoleLogBuffer = consoleLogBuffer;
+        this.serverLogTail = serverLogTail;
     }
 
     public synchronized void start(String bindAddress, int port) throws IOException {
@@ -168,7 +168,7 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
                 return;
             }
             if ("/api/server/console".equals(path)) {
-                if (consoleLogBuffer == null) {
+                if (serverLogTail == null) {
                     respond(socket, 404, "Not Found", "{\"error\":\"console_disabled\"}");
                     return;
                 }
@@ -246,10 +246,10 @@ public final class EmbeddedStatsApiServer implements AutoCloseable {
 
     private void respondConsole(Socket socket, String requestTarget) throws IOException {
         long after = Math.max(0L, queryLong(requestTarget, "after", 0L));
-        int limit = queryInt(requestTarget, "limit", 80);
-        ConsoleLogBuffer.Snapshot snapshot = consoleLogBuffer.readAfter(after, limit);
+        int limit = queryInt(requestTarget, "limit", 200);
+        ConsoleLogBuffer.Snapshot snapshot = serverLogTail.readAfter(after, limit);
         StringBuilder body = new StringBuilder(256);
-        body.append("{\"cursor\":").append(snapshot.cursor())
+        body.append("{\"source\":\"logs/latest.log\",\"cursor\":").append(snapshot.cursor())
                 .append(",\"truncated\":").append(snapshot.truncated())
                 .append(",\"lines\":[");
         for (int index = 0; index < snapshot.lines().size(); index++) {

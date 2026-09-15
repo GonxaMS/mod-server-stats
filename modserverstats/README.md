@@ -42,8 +42,9 @@ Para habilitar la pestana CLI, cambia `consoleEnabled = true` dentro de
 la salida en tiempo real o enviar comandos como `list`, `say mensaje` u
 `op jugador`.
 
-El mod conserva las ultimas 500 lineas solo en memoria. Manten la consola
-desactivada cuando no la necesites.
+La consola lee incrementalmente `logs/latest.log`: solo procesa los bytes nuevos
+desde la ultima consulta y conserva un tramo reciente acotado en memoria. Asi la
+app puede seguir la salida sin recargar el archivo completo en cada consulta.
 
 La autenticacion Basic no cifra el trafico. Para exponer la API en Internet
 usa HTTPS mediante un proxy TLS o una VPN privada; no publiques el puerto HTTP

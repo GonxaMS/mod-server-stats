@@ -67,10 +67,11 @@ public final class MainActivity extends Activity {
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
     private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
+    private static final int MAX_CONSOLE_CHARS = 32000;
     private static final int MIN_API_TOKEN_LENGTH = 32;
     private static final int MIN_API_PASSWORD_LENGTH = 12;
-    private static final int CURRENT_VERSION_CODE = 25;
-    private static final String CURRENT_VERSION_NAME = "1.24";
+    private static final int CURRENT_VERSION_CODE = 26;
+    private static final String CURRENT_VERSION_NAME = "1.25";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -143,6 +144,7 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         configureSystemBars();
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
         preferences = getSharedPreferences(PREFERENCES, MODE_PRIVATE);
@@ -201,8 +203,10 @@ public final class MainActivity extends Activity {
             int bottomInset;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
                 topInset = bars.top;
-                bottomInset = bars.bottom;
+                // Keep the command field and execute button above the keyboard.
+                bottomInset = Math.max(bars.bottom, ime.bottom);
             } else {
                 topInset = insets.getSystemWindowInsetTop();
                 bottomInset = insets.getSystemWindowInsetBottom();
@@ -322,51 +326,64 @@ public final class MainActivity extends Activity {
     }
 
     private View createConsoleScreen() {
-        ScrollView scroll = screenScroll();
-        LinearLayout content = screenContent(scroll);
+        LinearLayout screen = new LinearLayout(this);
+        screen.setOrientation(LinearLayout.VERTICAL);
+        screen.setBackgroundColor(COLOR_BACKGROUND);
+        screen.setPadding(dp(18), dp(14), dp(18), dp(12));
 
         TextView heading = label("REMOTE CONSOLE // OPERATOR");
         heading.setTextSize(20);
-        content.addView(heading, matchWidthWrapHeight());
+        screen.addView(heading, matchWidthWrapHeight());
 
         LinearLayout outputCard = card();
-        TextView outputTitle = label("SERVER OUTPUT // LIVE");
+        outputCard.setPadding(dp(12), dp(12), dp(12), dp(12));
+        TextView outputTitle = label("SERVER LOG // latest.log");
         outputTitle.setTextColor(COLOR_GREEN);
-        outputCard.addView(outputTitle, matchWidthWrapHeight());
+        outputCard.addView(outputTitle, marginParams(dp(6)));
 
         consoleOutputScrollView = new ConsoleOutputScrollView(this);
         consoleOutputScrollView.setFillViewport(true);
         consoleOutputScrollView.setVerticalScrollBarEnabled(true);
         consoleOutputScrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        consoleOutputScrollView.setBackground(roundBackground(Color.BLACK, COLOR_BORDER, 8));
+        // The card is the only frame. The scroll view must remain borderless so
+        // the live log does not look like a box inside another box.
+        consoleOutputScrollView.setBackgroundColor(Color.BLACK);
+        consoleOutputScrollView.setPadding(dp(6), dp(6), dp(6), dp(6));
         commandOutputView = new TextView(this);
         commandOutputView.setTextColor(COLOR_GREEN);
-        commandOutputView.setTextSize(13);
+        commandOutputView.setTextSize(12);
         commandOutputView.setTypeface(Typeface.MONOSPACE);
         commandOutputView.setGravity(Gravity.TOP | Gravity.START);
         commandOutputView.setTextIsSelectable(true);
-        commandOutputView.setMinHeight(dp(190));
-        commandOutputView.setPadding(dp(12), dp(12), dp(12), dp(12));
+        commandOutputView.setMinHeight(0);
+        commandOutputView.setIncludeFontPadding(true);
+        commandOutputView.setLineSpacing(0, 1.05f);
+        commandOutputView.setPadding(dp(4), dp(4), dp(4), dp(4));
         commandOutputView.setBackgroundColor(Color.TRANSPARENT);
         consoleOutputScrollView.addView(commandOutputView, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams outputScrollParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(220));
-        outputScrollParams.bottomMargin = dp(2);
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
         outputCard.addView(consoleOutputScrollView, outputScrollParams);
-        content.addView(outputCard, cardParams(dp(12)));
+        LinearLayout.LayoutParams outputCardParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
+        outputCardParams.topMargin = dp(12);
+        outputCardParams.bottomMargin = dp(8);
+        screen.addView(outputCard, outputCardParams);
 
         commandInput = new EditText(this);
         commandInput.setSingleLine(true);
+        commandInput.setHint("comando: list, say mensaje...");
         commandInput.setInputType(InputType.TYPE_CLASS_TEXT
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         styleInput(commandInput);
-        content.addView(commandInput, marginParams(dp(8)));
+        commandInput.setPadding(dp(4), 0, dp(4), 0);
+        screen.addView(commandInput, marginParams(dp(6)));
 
         commandSendButton = actionButton("[ EJECUTAR COMANDO ]", COLOR_MAGENTA);
         commandSendButton.setOnClickListener(view -> sendCommand());
-        content.addView(commandSendButton, marginParams(dp(12)));
-        return scroll;
+        screen.addView(commandSendButton, marginParams(0));
+        return screen;
     }
 
     private View createSettingsScreen() {
@@ -962,8 +979,10 @@ public final class MainActivity extends Activity {
                 || consoleTranscript.charAt(consoleTranscript.length() - 1) != '\n') {
             consoleTranscript.append('\n');
         }
-        if (consoleTranscript.length() > 12000) {
-            consoleTranscript.delete(0, consoleTranscript.length() - 12000);
+        if (consoleTranscript.length() > MAX_CONSOLE_CHARS) {
+            int trimUntil = consoleTranscript.length() - MAX_CONSOLE_CHARS;
+            int nextLine = consoleTranscript.indexOf("\n", trimUntil);
+            consoleTranscript.delete(0, nextLine >= 0 ? nextLine + 1 : trimUntil);
         }
         commandOutputView.setText(consoleTranscript.toString());
         if (consoleOutputScrollView != null) {
@@ -1067,7 +1086,7 @@ public final class MainActivity extends Activity {
         executor.execute(() -> {
             HttpURLConnection connection = null;
             try {
-                String consoleUrl = endpoint + "?after=" + after + "&limit=80";
+                String consoleUrl = endpoint + "?after=" + after + "&limit=200";
                 connection = (HttpURLConnection) new URL(consoleUrl).openConnection();
                 connection.setRequestMethod("GET");
                 applyApiCredentials(connection, apiUsername, apiPassword, legacyApiToken);
@@ -1095,22 +1114,21 @@ public final class MainActivity extends Activity {
                     }
 
                     long remoteCursor = payload.optLong("cursor", consoleCursor);
-                    if (remoteCursor < consoleCursor) {
-                        consoleCursor = 0L;
+                    if (remoteCursor < consoleCursor || payload.optBoolean("truncated", false)) {
                         consoleTranscript.setLength(0);
-                    } else {
-                        if (payload.optBoolean("truncated", false)) {
-                            consoleTranscript.setLength(0);
-                        }
-                        JSONArray lines = payload.optJSONArray("lines");
-                        if (lines != null) {
-                            for (int index = 0; index < lines.length(); index++) {
-                                JSONObject line = lines.optJSONObject(index);
-                                if (line != null) appendConsoleLine(line.optString("text", ""));
-                            }
-                        }
-                        consoleCursor = remoteCursor;
                     }
+                    JSONArray lines = payload.optJSONArray("lines");
+                    if (lines != null) {
+                        StringBuilder received = new StringBuilder();
+                        for (int index = 0; index < lines.length(); index++) {
+                            JSONObject line = lines.optJSONObject(index);
+                            if (line == null) continue;
+                            if (received.length() > 0) received.append('\n');
+                            received.append(line.optString("text", ""));
+                        }
+                        if (received.length() > 0) appendConsoleLine(received.toString());
+                    }
+                    consoleCursor = remoteCursor;
                     consoleLastError = null;
                     scheduleConsolePolling();
                 });
