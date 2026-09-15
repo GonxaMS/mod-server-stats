@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
@@ -23,8 +24,10 @@ import android.os.Build;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.WindowInsets;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -62,8 +65,8 @@ public final class MainActivity extends Activity {
     private static final String DEFAULT_PORT = "8080";
     private static final int MAX_HISTORY_SAMPLES = 720;
     private static final long CONSOLE_POLL_INTERVAL_MS = 1000L;
-    private static final int CURRENT_VERSION_CODE = 19;
-    private static final String CURRENT_VERSION_NAME = "1.18";
+    private static final int CURRENT_VERSION_CODE = 20;
+    private static final String CURRENT_VERSION_NAME = "1.19";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -341,7 +344,7 @@ public final class MainActivity extends Activity {
         outputTitle.setTextColor(COLOR_GREEN);
         outputCard.addView(outputTitle, matchWidthWrapHeight());
 
-        consoleOutputScrollView = new ScrollView(this);
+        consoleOutputScrollView = new ConsoleOutputScrollView(this);
         consoleOutputScrollView.setFillViewport(true);
         consoleOutputScrollView.setVerticalScrollBarEnabled(true);
         consoleOutputScrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
@@ -902,6 +905,9 @@ public final class MainActivity extends Activity {
 
     private void appendConsoleLine(String text) {
         if (commandOutputView == null) return;
+        boolean followTail = isConsoleOutputAtBottom();
+        int previousScrollY = consoleOutputScrollView == null
+                ? 0 : consoleOutputScrollView.getScrollY();
         if (consoleTranscript.length() > 0
                 && consoleTranscript.charAt(consoleTranscript.length() - 1) != '\n') {
             consoleTranscript.append('\n');
@@ -916,8 +922,23 @@ public final class MainActivity extends Activity {
         }
         commandOutputView.setText(consoleTranscript.toString());
         if (consoleOutputScrollView != null) {
-            consoleOutputScrollView.post(() -> consoleOutputScrollView.fullScroll(View.FOCUS_DOWN));
+            consoleOutputScrollView.post(() -> {
+                if (followTail) {
+                    consoleOutputScrollView.fullScroll(View.FOCUS_DOWN);
+                } else {
+                    consoleOutputScrollView.scrollTo(0, previousScrollY);
+                }
+            });
         }
+    }
+
+    private boolean isConsoleOutputAtBottom() {
+        if (consoleOutputScrollView == null || commandOutputView == null) return true;
+        int viewportHeight = consoleOutputScrollView.getHeight();
+        if (viewportHeight <= 0) return true;
+        int contentBottom = commandOutputView.getBottom();
+        return consoleOutputScrollView.getScrollY() + viewportHeight
+                >= contentBottom - dp(8);
     }
 
     private void startConsolePolling() {
@@ -1266,6 +1287,26 @@ public final class MainActivity extends Activity {
                         height + glowInset), radius + glowInset, radius + glowInset, glowPaint);
                 canvas.drawRoundRect(new RectF(0, 0, fillWidth, height), radius, radius, fillPaint);
             }
+        }
+    }
+
+    /** Keeps the live output scrollable without letting the outer screen consume the gesture. */
+    private final class ConsoleOutputScrollView extends ScrollView {
+        ConsoleOutputScrollView(Context context) {
+            super(context);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            ViewParent parent = getParent();
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN && parent != null) {
+                parent.requestDisallowInterceptTouchEvent(true);
+            } else if ((action == MotionEvent.ACTION_UP
+                    || action == MotionEvent.ACTION_CANCEL) && parent != null) {
+                parent.requestDisallowInterceptTouchEvent(false);
+            }
+            return super.dispatchTouchEvent(event);
         }
     }
 
