@@ -2,6 +2,8 @@ name: Build mod and Android app
 
 on:
   push:
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
 
@@ -85,3 +87,31 @@ jobs:
           path: android-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-mod, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download mod artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-server-stats-neoforge-jar
+          path: release
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-server-stats-android-apk
+          path: release
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Mod Server Stats $GITHUB_REF_NAME" \
+            --generate-notes
