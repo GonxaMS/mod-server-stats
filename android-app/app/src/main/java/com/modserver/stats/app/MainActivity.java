@@ -70,8 +70,8 @@ public final class MainActivity extends Activity {
     private static final int MAX_CONSOLE_CHARS = 32000;
     private static final int MIN_API_TOKEN_LENGTH = 32;
     private static final int MIN_API_PASSWORD_LENGTH = 12;
-    private static final int CURRENT_VERSION_CODE = 26;
-    private static final String CURRENT_VERSION_NAME = "1.25";
+    private static final int CURRENT_VERSION_CODE = 27;
+    private static final String CURRENT_VERSION_NAME = "1.26";
     private static final int INSTALL_PERMISSION_REQUEST_CODE = 4101;
     private static final String DEFAULT_UPDATE_MANIFEST_URL =
             "https://github.com/GonxaMS/mod-server-stats/releases/latest/download/latest.json";
@@ -131,6 +131,8 @@ public final class MainActivity extends Activity {
     private final ArrayList<StatsSample> history = new ArrayList<>();
     private final StringBuilder consoleTranscript = new StringBuilder();
     private boolean commandInProgress;
+    private boolean consoleFollowTail = true;
+    private boolean consoleScrollProgrammatic;
     private Runnable consolePollRunnable;
     private boolean consoleScreenActive;
     private boolean consolePolling;
@@ -349,6 +351,12 @@ public final class MainActivity extends Activity {
         // the live log does not look like a box inside another box.
         consoleOutputScrollView.setBackgroundColor(Color.BLACK);
         consoleOutputScrollView.setPadding(dp(6), dp(6), dp(6), dp(6));
+        consoleOutputScrollView.setOnScrollChangeListener(
+                (view, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+                    if (!consoleScrollProgrammatic && view.getHeight() > 0) {
+                        consoleFollowTail = isConsoleOutputAtBottom();
+                    }
+                });
         commandOutputView = new TextView(this);
         commandOutputView.setTextColor(COLOR_GREEN);
         commandOutputView.setTextSize(12);
@@ -376,8 +384,16 @@ public final class MainActivity extends Activity {
         commandInput.setHint("comando: list, say mensaje...");
         commandInput.setInputType(InputType.TYPE_CLASS_TEXT
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        styleInput(commandInput);
-        commandInput.setPadding(dp(4), 0, dp(4), 0);
+        commandInput.setTextColor(COLOR_TEXT);
+        commandInput.setHintTextColor(COLOR_DIM);
+        commandInput.setTextSize(14);
+        commandInput.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        commandInput.setMinHeight(dp(48));
+        commandInput.setPadding(dp(12), dp(4), dp(12), dp(4));
+        commandInput.setBackground(roundBackground(COLOR_SURFACE_RAISED, COLOR_CYAN, 8));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            commandInput.setBackgroundTintList(null);
+        }
         screen.addView(commandInput, marginParams(dp(6)));
 
         commandSendButton = actionButton("[ EJECUTAR COMANDO ]", COLOR_MAGENTA);
@@ -967,7 +983,7 @@ public final class MainActivity extends Activity {
 
     private void appendConsoleLine(String text) {
         if (commandOutputView == null) return;
-        boolean followTail = isConsoleOutputAtBottom();
+        boolean followTail = consoleFollowTail || isConsoleOutputAtBottom();
         int previousScrollY = consoleOutputScrollView == null
                 ? 0 : consoleOutputScrollView.getScrollY();
         if (consoleTranscript.length() > 0
@@ -987,10 +1003,23 @@ public final class MainActivity extends Activity {
         commandOutputView.setText(consoleTranscript.toString());
         if (consoleOutputScrollView != null) {
             consoleOutputScrollView.post(() -> {
-                if (followTail) {
-                    consoleOutputScrollView.fullScroll(View.FOCUS_DOWN);
-                } else {
-                    consoleOutputScrollView.scrollTo(0, previousScrollY);
+                consoleScrollProgrammatic = true;
+                try {
+                    if (followTail) {
+                        consoleOutputScrollView.fullScroll(View.FOCUS_DOWN);
+                        consoleFollowTail = true;
+                    } else {
+                        int contentBottom = consoleOutputScrollView.getChildCount() == 0
+                                ? 0 : consoleOutputScrollView.getChildAt(0).getBottom();
+                        int viewportBottom = consoleOutputScrollView.getHeight()
+                                - consoleOutputScrollView.getPaddingBottom();
+                        int maxScrollY = Math.max(0, contentBottom - viewportBottom);
+                        consoleOutputScrollView.scrollTo(0,
+                                Math.min(previousScrollY, maxScrollY));
+                        consoleFollowTail = isConsoleOutputAtBottom();
+                    }
+                } finally {
+                    consoleScrollProgrammatic = false;
                 }
             });
         }
@@ -998,11 +1027,15 @@ public final class MainActivity extends Activity {
 
     private boolean isConsoleOutputAtBottom() {
         if (consoleOutputScrollView == null || commandOutputView == null) return true;
-        int viewportHeight = consoleOutputScrollView.getHeight();
+        int viewportHeight = consoleOutputScrollView.getHeight()
+                - consoleOutputScrollView.getPaddingTop()
+                - consoleOutputScrollView.getPaddingBottom();
         if (viewportHeight <= 0) return true;
-        int contentBottom = commandOutputView.getBottom();
+        int contentBottom = consoleOutputScrollView.getChildCount() == 0
+                ? commandOutputView.getBottom()
+                : consoleOutputScrollView.getChildAt(0).getBottom();
         return consoleOutputScrollView.getScrollY() + viewportHeight
-                >= contentBottom - dp(8);
+                >= contentBottom - dp(12);
     }
 
     private void startConsolePolling() {
@@ -1079,6 +1112,7 @@ public final class MainActivity extends Activity {
             consoleCursor = 0L;
             consoleLastError = null;
             consoleTranscript.setLength(0);
+            consoleFollowTail = true;
         }
 
         final long after = consoleCursor;
@@ -1116,6 +1150,7 @@ public final class MainActivity extends Activity {
                     long remoteCursor = payload.optLong("cursor", consoleCursor);
                     if (remoteCursor < consoleCursor || payload.optBoolean("truncated", false)) {
                         consoleTranscript.setLength(0);
+                        consoleFollowTail = true;
                     }
                     JSONArray lines = payload.optJSONArray("lines");
                     if (lines != null) {
